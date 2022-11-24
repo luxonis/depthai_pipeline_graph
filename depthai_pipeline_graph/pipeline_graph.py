@@ -12,6 +12,7 @@ def main():
     import json
     import time
     from threading import Thread
+    from typing import Any, Dict
 
 
     node_color = {
@@ -210,35 +211,38 @@ def main():
             print('Schema:', schema)
 
 
-        # create the nodes.
-        qt_nodes = {}
         dai_connections = schema['connections']
-        dai_nodes = {} # key = id, value = dict with keys 'type', 'blocking', 'queue_size' and 'name' (if args.use_variable_name)
-        # Hold id->port
-        input_port_map = dict()
-        output_port_map = dict()
-        input_name_to_id_map = dict()
-        output_name_to_id_map = dict()
 
-        print("\nNodes (id):\n===========")
+        class NodePort:
+            name: str
+            port: Any # QT port object
+            node: Dict # From schema
+            type: int # Inout or output
+            dai_node: Any
+            group_name: str # Not sure
+
+            def is_input(self) -> bool:
+                return self.type == 3
+            def is_output(self) -> bool:
+                return self.type == 0
+            def find_node(self, node_id: int, group_name: str, port_name: str) -> bool:
+                return self.name == port_name and self.dai_node['id'] == node_id and self.group_name == group_name
+            def __str__(self):
+                return f"NodeId {self.dai_node['id']}, Port {self.name}"
+
+
+        ports: Dict[int, NodePort] = {}
         for n in schema['nodes']:
             dict_n = n[1]
             node_name = dict_n['name']
-            if args.verbose:
-                print(f"{node_name}, {dict_n}")
-            else:
-                print(f"{node_name}")
-            id = dict_n['id']
-            dai_nodes[dict_n['id']] = {'type': node_name}
-            if args.action == "run" and args.use_variable_names:
-                dai_nodes[dict_n['id']]['name'] = f"{node_name} - {node_name[dict_n['id']]}"
-            else:
-                dai_nodes[dict_n['id']]['name'] = f"{node_name} ({dict_n['id']})"
 
             # Create the node
-            qt_nodes[id] = graph.create_node('dai.DepthaiNode', name=node_name, color=node_color.get(node_name, default_node_color), text_color=(0,0,0), push_undo=False)
+            qt_node = graph.create_node('dai.DepthaiNode', name=node_name, color=node_color.get(node_name, default_node_color), text_color=(0,0,0), push_undo=False)
 
-            for io in dict_n['ioInfo']:
+            # Alphabetic order
+            ioInfo = list(sorted(dict_n['ioInfo'], key = lambda el: el[0][1]))
+
+            for io in ioInfo:
                 dict_io = io[1]
                 io_id = dict_io['id']
                 port_name = dict_io['name']
@@ -247,23 +251,26 @@ def main():
                     port_name = f"{dict_io['group']}[{port_name}]"
                 blocking = dict_io['blocking']
                 queue_size = dict_io['queueSize']
-                port_color = (249,75,0) if blocking else (0,255,0)
-                port_label = f"[{queue_size}] {port_name}"
 
-                io_key = tuple([id, dict_io['group'], dict_io['name']])
-                if dict_io['type'] == 3: # Input
-                    input_port_map[dict_io['id']] = qt_nodes[id].add_input(name=port_label, color=port_color, multi_input=True)
-                    input_name_to_id_map[io_key] = io_id
-                elif dict_io['type'] == 0: # Output
-                    output_port_map[dict_io['id']] = qt_nodes[id].add_output(name=port_name)
-                    output_name_to_id_map[io_key] = io_id
+                p = NodePort()
+                p.name = port_name
+                p.type = dict_io['type'] # Input/Output
+                p.node = qt_node
+                p.dai_node = n[1]
+                p.group_name = port_group
+
+                if p.is_input(): # Input
+                    port_color = (249, 75, 0) if blocking else (0, 255, 0)
+                    port_label = f"[{queue_size}] {port_name}"
+                    p.port = qt_node.add_input(name=port_label, color=port_color, multi_input=True)
+                elif p.is_output(): # Output
+                    p.port = qt_node.add_output(name=port_name)
                 else:
                     print('Unhandled case!')
 
+                ports[io_id] = p
 
-        print("\nConnections:\n============")
-        i=0
-        for c in dai_connections:
+        for i, c in enumerate(dai_connections):
             src_node_id = c["node1Id"]
             src_name = c["node1Output"]
             src_group = c["node1OutputGroup"]
@@ -271,12 +278,11 @@ def main():
             dst_name = c["node2Input"]
             dst_group = c["node2InputGroup"]
 
-            out_key = tuple([src_node_id, src_group, src_name])
-            in_key = tuple([dst_node_id, dst_group, dst_name])
-            print(i,f"{out_key} -> {in_key}")
+            src_port = [p for n,p in ports.items() if p.find_node(src_node_id, src_group, src_name)][0]
+            dst_port = [p for n, p in ports.items() if p.find_node(dst_node_id, dst_group, dst_name)][0]
 
-            output_port_map[output_name_to_id_map[out_key]].connect_to(input_port_map[input_name_to_id_map[in_key]], push_undo=False)
-            i+=1
+            print(f"[{i}] {src_port} -> {dst_port}")
+            src_port.port.connect_to(dst_port.port, push_undo=False)
 
         # Lock the ports
         graph.lock_all_ports()
