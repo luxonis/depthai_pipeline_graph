@@ -28,7 +28,7 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
         super(PipeItem, self).__init__()
         self.setZValue(Z_VAL_PIPE)
         self.setAcceptHoverEvents(True)
-        self.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable)
+        # self.setFlag(QtWidgets.QGraphicsItem.ItemIsSelectable)
         self._color = PipeEnum.COLOR.value
         self._style = PipeEnum.DRAW_TYPE_DEFAULT.value
         self._active = False
@@ -41,6 +41,29 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
         self._arrow.append(QtCore.QPointF(0.0, -size * 1.5))
         self._arrow.append(QtCore.QPointF(size, size))
         self.setCacheMode(ITEM_CACHE_MODE)
+
+        def create_fps_txt(location):
+            text = QtWidgets.QGraphicsTextItem(f"i: 0", self)
+            text.font().setPointSize(10)
+            text.setFont(text.font())
+            text.setVisible(True)
+            text.setCacheMode(ITEM_CACHE_MODE)
+            text.setPos(*location)
+            return text
+
+        self.fps_send = create_fps_txt(self._fps_send_location())
+        self.fps_receive = create_fps_txt(self._fps_receive_location())
+
+    def _fps_send_location(self):
+        x = self.path().pointAtPercent(0.10).x()
+        y = self.path().pointAtPercent(0.10).y()
+        return (x,y)
+
+    def _fps_receive_location(self):
+        x = self.path().pointAtPercent(0.75).x()
+        y = self.path().pointAtPercent(0.75).y()
+        print(x,y)
+        return (x,y)
 
     def __repr__(self):
         in_name = self._input_port.name if self._input_port else ''
@@ -61,6 +84,39 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
         if self.isSelected():
             self.highlight()
 
+        # FPS counters
+        # txt = FpsCounter('')
+        # port_txt = FpsCounter('')
+        # self.port_fps[port] = {
+        #     'send_txt': txt,
+        #     'send_fps': FPSHandler(),
+        #     'receive_txt': port_txt,
+        #     'receive_fps': FPSHandler(),
+        #     'port': port,
+        #     'pipe': pipe_item
+        # }
+        # self.scene().addItem(txt)
+        # self.scene().addItem(port_txt)
+
+    i = 1
+    def new_event(self, sender):
+        self.i += 1
+        self.fps_send.setPos(*self._fps_send_location())
+        self.fps_receive.setPos(*self._fps_receive_location())
+
+        self.fps_send.setPlainText(f"i: {self.i}")
+
+
+    def paint_fps(self, painter):
+        """
+        Draws FPS of the pipe/connection
+        """
+        def draw_fps(percent, fps: float):
+            x = self.path().pointAtPercent(percent).x()
+            y = self.path().pointAtPercent(percent).y()
+
+            painter.drawText(QtCore.QPointF(x, y), "{:.1f} FPS".format(fps))
+
     def paint(self, painter, option, widget):
         """
         Draws the connection line between nodes.
@@ -71,7 +127,9 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
                 used to describe the parameters needed to draw.
             widget (QtWidgets.QWidget): not used.
         """
+
         color = QtGui.QColor(*self._color)
+
         pen_style = PIPE_STYLES.get(self.style)
         pen_width = PipeEnum.WIDTH.value
         if self._active:
@@ -103,6 +161,9 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
         painter.setPen(pen)
         painter.setRenderHint(painter.Antialiasing, True)
         painter.drawPath(self.path())
+
+        self.paint_fps(painter)
+
 
         # draw arrow
         if self.input_port and self.output_port:
@@ -390,6 +451,7 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
         self._style = style
 
     def delete(self):
+        return # Don't allow configuring DepthAI pipeline
         if self.input_port and self.input_port.connected_pipes:
             self.input_port.remove_pipe(self)
         if self.output_port and self.output_port.connected_pipes:

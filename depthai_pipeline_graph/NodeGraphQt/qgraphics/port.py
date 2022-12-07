@@ -1,6 +1,6 @@
 #!/usr/bin/python
 from Qt import QtGui, QtCore, QtWidgets
-
+from depthai_sdk import FPSHandler
 from ..constants import (
     PortTypeEnum, PortEnum,
     Z_VAL_PORT,
@@ -134,6 +134,7 @@ class PortItem(QtWidgets.QGraphicsItem):
         super(PortItem, self).hoverLeaveEvent(event)
 
     def viewer_start_connection(self):
+        return # Don't allow configuring DepthAI pipeline
         viewer = self.scene().viewer()
         viewer.start_live_connection(self)
 
@@ -258,10 +259,12 @@ class PortItem(QtWidgets.QGraphicsItem):
             return
         if self.scene():
             viewer = self.scene().viewer()
-            viewer.establish_connection(self, port)
+            pipe_item = viewer.establish_connection(self, port)
+
         # redraw the ports.
         port.update()
         self.update()
+        return pipe_item
 
     def disconnect_from(self, port):
         port_types = {
