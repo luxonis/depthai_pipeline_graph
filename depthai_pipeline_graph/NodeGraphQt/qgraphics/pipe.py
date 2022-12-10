@@ -18,6 +18,7 @@ PIPE_STYLES = {
     PipeEnum.DRAW_TYPE_DOTTED.value: QtCore.Qt.DotLine
 }
 
+from depthai_sdk import FPSHandler
 
 class PipeItem(QtWidgets.QGraphicsPathItem):
     """
@@ -51,19 +52,14 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
             text.setPos(*location)
             return text
 
-        self.fps_send = create_fps_txt(self._fps_send_location())
-        self.fps_receive = create_fps_txt(self._fps_receive_location())
-
-    def _fps_send_location(self):
-        x = self.path().pointAtPercent(0.10).x()
-        y = self.path().pointAtPercent(0.10).y()
-        return (x,y)
-
-    def _fps_receive_location(self):
-        x = self.path().pointAtPercent(0.75).x()
-        y = self.path().pointAtPercent(0.75).y()
-        print(x,y)
-        return (x,y)
+        self.fps_text = {
+            'send': create_fps_txt(self._fps_location('send')),
+            'receive': create_fps_txt(self._fps_location('receive'))
+        }
+        self.fps = {
+            'send': FPSHandler(),
+            'receive': FPSHandler()
+        }
 
     def __repr__(self):
         in_name = self._input_port.name if self._input_port else ''
@@ -84,28 +80,22 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
         if self.isSelected():
             self.highlight()
 
-        # FPS counters
-        # txt = FpsCounter('')
-        # port_txt = FpsCounter('')
-        # self.port_fps[port] = {
-        #     'send_txt': txt,
-        #     'send_fps': FPSHandler(),
-        #     'receive_txt': port_txt,
-        #     'receive_fps': FPSHandler(),
-        #     'port': port,
-        #     'pipe': pipe_item
-        # }
-        # self.scene().addItem(txt)
-        # self.scene().addItem(port_txt)
+    def _fps_location(self, name):
+        percentage = 0.9 if name == 'send' else 0.2
+        x = self.path().pointAtPercent(percentage).x()
+        y = self.path().pointAtPercent(percentage).y()
+        return (x,y)
 
-    i = 1
     def new_event(self, sender):
-        self.i += 1
-        self.fps_send.setPos(*self._fps_send_location())
-        self.fps_receive.setPos(*self._fps_receive_location())
+        name = 'send' if sender else 'receive'
+        self.fps[name].nextIter()
+        print('current fps', self.fps[name].fps())
 
-        self.fps_send.setPlainText(f"i: {self.i}")
-
+    def update_fps(self):
+        for name in ['send', 'receive']:
+            pos = self._fps_location(name)
+            self.fps_text[name].setPos(*pos)
+            self.fps_text[name].setPlainText("FPS: {:.1f}".format(self.fps[name].fps()))
 
     def paint_fps(self, painter):
         """

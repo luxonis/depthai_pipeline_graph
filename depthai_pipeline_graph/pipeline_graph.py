@@ -1,243 +1,270 @@
 #!/usr/bin/env python3
+from argparse import ArgumentParser
+import depthai as dai
+import subprocess
+import os, signal
+import re
+from Qt import QtWidgets, QtCore
+from .NodeGraphQt import NodeGraph, BaseNode, PropertiesBinWidget
+from .NodeGraphQt.constants import ViewerEnum
+import json
+import time
+from threading import Thread
+from typing import Any, Dict, List
 
-def main():
-    import subprocess
-    from argparse import ArgumentParser
-    import os, signal
-    import re
-    import sys
-    from Qt import QtWidgets, QtCore
-    from .NodeGraphQt import NodeGraph, BaseNode, PropertiesBinWidget
-    from .NodeGraphQt.constants import ViewerEnum
-    import json
-    import time
-    from threading import Thread
-    from typing import Any, Dict
 
+class DepthaiNode(BaseNode):
+    # unique node identifier.
+    __identifier__ = 'dai'
+
+    # initial default node name.
+    NODE_NAME = 'Node'
+
+    def __init__(self):
+        super(DepthaiNode, self).__init__()
+        # create QLineEdit text input widget.
+        # self.add_text_input('my_input', 'Text Input', tab='widgets')
+
+class TraceEvent():
+    event: int
+    status: int
+    src_id: str
+    dst_id: str
+    timestamp = 0.0
+    host_timestamp = 0.0
+
+class NodePort:
+    id: str # Id of the port
+    name: str # preview, out, video...
+    port: Any  # QT port object
+    node: Dict  # From json schema
+    type: int  # Input or output
+    dai_node: Any
+    group_name: str  # Not sure
+
+    def is_input(self) -> bool:
+        return self.type == 3
+
+    def is_output(self) -> bool:
+        return self.type == 0
+
+    def find_node(self, node_id: int, group_name: str, port_name: str) -> bool:
+        return self.name == port_name and self.dai_node['id'] == node_id and self.group_name == group_name
+
+    def __str__(self):
+        return f"NodeId {self.dai_node['id']}, Port {self.name}"
+
+
+class PipelineGraph:
 
     node_color = {
-        "ColorCamera": (241,148,138),
-        "MonoCamera": (243,243,243),
-        "ImageManip": (174,214,241),
-        "VideoEncoder": (190,190,190),
+        "ColorCamera": (241, 148, 138),
+        "MonoCamera": (243, 243, 243),
+        "ImageManip": (174, 214, 241),
+        "VideoEncoder": (190, 190, 190),
 
-        "NeuralNetwork": (171,235,198),
-        "DetectionNetwork": (171,235,198),
-        "MobileNetDetectionNetwork": (171,235,198),
-        "MobileNetSpatialDetectionNetwork": (171,235,198),
-        "YoloDetectionNetwork": (171,235,198),
-        "YoloSpatialDetectionNetwork": (171,235,198),
-        "SpatialDetectionNetwork": (171,235,198),
+        "NeuralNetwork": (171, 235, 198),
+        "DetectionNetwork": (171, 235, 198),
+        "MobileNetDetectionNetwork": (171, 235, 198),
+        "MobileNetSpatialDetectionNetwork": (171, 235, 198),
+        "YoloDetectionNetwork": (171, 235, 198),
+        "YoloSpatialDetectionNetwork": (171, 235, 198),
+        "SpatialDetectionNetwork": (171, 235, 198),
 
-        "SPIIn": (242,215,213),
-        "XLinkIn": (242,215,213),
+        "SPIIn": (242, 215, 213),
+        "XLinkIn": (242, 215, 213),
 
-        "SPIOut": (230,176,170),
-        "XLinkOut": (230,176,170),
+        "SPIOut": (230, 176, 170),
+        "XLinkOut": (230, 176, 170),
 
-        "Script": (249,231,159),
+        "Script": (249, 231, 159),
 
-        "StereoDepth": (215,189,226),
-        "SpatialLocationCalculator": (215,189,226),
+        "StereoDepth": (215, 189, 226),
+        "SpatialLocationCalculator": (215, 189, 226),
 
-        "EdgeDetector": (248,196,113),
-        "FeatureTracker": (248,196,113),
-        "ObjectTracker": (248,196,113),
-        "IMU": (248,196,113)
+        "EdgeDetector": (248, 196, 113),
+        "FeatureTracker": (248, 196, 113),
+        "ObjectTracker": (248, 196, 113),
+        "IMU": (248, 196, 113)
     }
+    default_node_color = (190, 190, 190)  # For node types that does not appear in 'node_color'
+    process = None
+    links: Dict[str, Dict[str, Any]]
 
-    default_node_color = (190,190,190) # For node types that does not appear in 'node_color'
+    def __init__(self):
 
+        # handle SIGINT to make the app terminate on CTRL+C
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
 
-    class DepthaiNode(BaseNode):
-        # unique node identifier.
-        __identifier__ = 'dai'
+        QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
 
-        # initial default node name.
-        NODE_NAME = 'Node'
+        self.app = QtWidgets.QApplication(["DepthAI Pipeline Graph"])
 
-        def __init__(self):
-            super(DepthaiNode, self).__init__()
+        # create node graph controller.
+        self.graph = NodeGraph()
+        self.graph.set_background_color(255,255,255)
+        self.graph.set_grid_mode(ViewerEnum.GRID_DISPLAY_NONE.value)
 
-            # create QLineEdit text input widget.
-            # self.add_text_input('my_input', 'Text Input', tab='widgets')
-
-    parser = ArgumentParser()
-    subparsers = parser.add_subparsers(help="Action", required=True, dest="action")
-
-    run_parser = subparsers.add_parser("run", help="Run your depthai program to create the corresponding pipeline graph")
-    run_parser.add_argument('command', type=str,
-                help="The command with its arguments between ' or \" (ex: python script.py -i file)")
-    run_parser.add_argument("-dnk", "--do_not_kill", action="store_true",
-                help="Don't terminate the command when the schema string has been retrieved")
-    run_parser.add_argument("-var", "--use_variable_names", action="store_true",
-                help="Use the variable names from the python code to name the graph nodes")
-    run_parser.add_argument("-p", "--pipeline_name", type=str, default="pipeline",
-                help="Name of the pipeline variable in the python code (default=%(default)s)")
-    run_parser.add_argument('-v', '--verbose', action="store_true",
-                help="Show on the console the command output")
-
-    from_file_parser = subparsers.add_parser("from_file",
-                help="Create the pipeline graph by parsing a file containing the schema (log file generated with DEPTHAI_LEVEL=debug or Json file generated by pipeline.serializeToJSon())")
-    from_file_parser.add_argument("schema_file",
-                help="Path of the file containing the schema")
-
-    load_parser = subparsers.add_parser("load", help="Load a previously saved pipeline graph")
-    load_parser.add_argument("json_file",
-                help="Path of the .json file")
-    args = parser.parse_args()
-
-    # handle SIGINT to make the app terminate on CTRL+C
-    signal.signal(signal.SIGINT, signal.SIG_DFL)
-
-    QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
-
-    app = QtWidgets.QApplication(["DepthAI Pipeline Graph"])
-
-    # create node graph controller.
-    graph = NodeGraph()
-    graph.set_background_color(255,255,255)
-    graph.set_grid_mode(ViewerEnum.GRID_DISPLAY_NONE.value)
-
-    graph.register_node(DepthaiNode)
+        self.graph.register_node(DepthaiNode)
 
 
-    # create a node properties bin widget.
-    properties_bin = PropertiesBinWidget(node_graph=graph)
-    properties_bin.setWindowFlags(QtCore.Qt.Tool)
+        # create a node properties bin widget.
+        self.properties_bin = PropertiesBinWidget(node_graph=self.graph)
+        self.properties_bin.setWindowFlags(QtCore.Qt.Tool)
 
-    # show the node properties bin widget when a node is double clicked.
-    def display_properties_bin(node):
-        if not properties_bin.isVisible():
-            properties_bin.show()
-    # wire function to "node_double_clicked" signal.
-    graph.node_double_clicked.connect(display_properties_bin)
+        # show the node properties bin widget when a node is double-clicked.
+        def display_properties_bin(node):
+            if not self.properties_bin.isVisible():
+                self.properties_bin.show()
+        # wire function to "node_double_clicked" signal.
+        self.graph.node_double_clicked.connect(display_properties_bin)
 
         # show the node graph widget.
-    graph_widget = graph.widget
-    graph_widget.resize(1100, 800)
+        self.graph_widget = self.graph.widget
+        self.graph_widget.resize(1100, 800)
 
-    process = None
+    def main(self, args):
 
-    if args.action == "load":
+        if args.action == "load":
+            self.graph_widget.show()
+            self.graph.load_session(args.json)
+            self.graph.fit_to_selection()
+            self.graph.set_zoom(-0.9)
+            self.graph.clear_selection()
+            self.graph.clear_undo_stack()
+            self.app.exec_()
 
-        graph_widget.show()
-        graph.load_session(args.json_file)
-        graph.fit_to_selection()
-        graph.set_zoom(-0.9)
-        graph.clear_selection()
-        graph.clear_undo_stack()
+        else:
+            if args.action == "run":
+                os.environ["PYTHONUNBUFFERED"] = "1"
+                os.environ["DEPTHAI_LEVEL"] = "trace"
 
-        app.exec_()
+                command = args.command.split()
+                if args.use_variable_names:
+                    # If command starts with "python", we remove it
+                    if "python" in command[0]:
+                        command.pop(0)
 
-    else:
-        if args.action == "run":
-            os.environ["PYTHONUNBUFFERED"] = "1"
-            os.environ["DEPTHAI_LEVEL"] = "trace"
+                    command = "python -m trace -t ".split() + command
 
-            command = args.command.split()
-            if args.use_variable_names:
-                # If command starts with "python", we remove it
-                if "python" in command[0]:
-                    command.pop(0)
-
-                command = "python -m trace -t ".split() + command
                 pipeline_create_re = f'.*:\s*(.*)\s*=\s*{args.pipeline_name}\.create.*'
                 node_name = []
-            process = subprocess.Popen(command, shell=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                self.process = subprocess.Popen(command, shell=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
-            schema_str = None
-            record_output = "" # Save the output and print it in case something went wrong
-            while True:
-                if process.poll() is not None: break
-                line = process.stdout.readline()
-                record_output += line
-                if args.verbose:
-                    print(line.rstrip('\n'))
-                # we are looking for  a line:  ... [debug] Schema dump: {"connections":[{"node1Id":1...
-                match = re.match(r'.* Schema dump: (.*)', line)
-                if match:
-                    schema_str = match.group(1)
-                    print("Pipeline schema retrieved")
-                    break
-                    # TODO(themarpe) - expose "do kill" now
-                    # # print(schema_str)
-                    # if not args.do_not_kill:
-                    #     print("Terminating program...")
-                    #     process.terminate()
-                elif args.use_variable_names:
-                    match = re.match(pipeline_create_re, line)
-                    if match:
-                        node_name.append(match.group(1))
-            print("Program exited.")
-            if schema_str is None:
-                if not args.verbose:
-                    print(record_output)
-                print("\nSomething went wrong, the schema could not be extracted")
-                exit(1)
-            schema = json.loads(schema_str)
-        elif args.action == "from_file":
-            with open(args.schema_file, "r") as schema_file:
-                # schema_file is either:
-                # 1) a Json file generated by a call to pipeline.serializeToJson(),
-                # 2) a log file generated by running the user program with DEPTHAI_LEVEL set to debug
-
-                # Are we in case 1) ?
-                try:
-                    schema = json.load(schema_file)
-                    if 'pipeline' not in schema:
-                        print(f"Json file '{args.schema_file}' is missing 'pipeline' key")
-                        exit(1)
-                    schema = schema['pipeline']
-                    print("Pipeline schema retrieved")
-                except json.decoder.JSONDecodeError:
-                    # schema_file is not a Json file, so we are probably in case 2)
+                schema_str = None
+                record_output = "" # Save the output and print it in case something went wrong
+                while True:
+                    if self.process.poll() is not None: break
+                    line = self.process.stdout.readline()
+                    record_output += line
+                    if args.verbose:
+                        print(line.rstrip('\n'))
                     # we are looking for  a line:  ... [debug] Schema dump: {"connections":[{"node1Id":1...
-                    schema_file.seek(0) # Rewind the file
-                    while True:
-                        line = schema_file.readline()
-                        if len(line) == 0:
-                            # End of file
-                            print("\nSomething went wrong, the schema could not be extracted")
-                            exit(1)
-                        match = re.match(r'.* Schema dump: (.*)', line)
+                    match = re.match(r'.* Schema dump: (.*)', line)
+                    if match:
+                        schema_str = match.group(1)
+                        print("Pipeline schema retrieved")
+                        break
+                        # TODO(themarpe) - expose "do kill" now
+                        # # print(schema_str)
+                        # if not args.do_not_kill:
+                        #     print("Terminating program...")
+                        #     process.terminate()
+                    elif args.use_variable_names:
+                        match = re.match(pipeline_create_re, line)
                         if match:
-                            schema_str = match.group(1)
-                            print("Pipeline schema retrieved")
-                            break
-                    schema = json.loads(schema_str)
+                            node_name.append(match.group(1))
+                print("Program exited.")
+                if schema_str is None:
+                    if not args.verbose:
+                        print(record_output)
+                    print("\nSomething went wrong, the schema could not be extracted")
+                    exit(1)
+                schema = json.loads(schema_str)
 
-        if args.verbose:
-            print('Schema:', schema)
+            elif args.action == "from_file":
+                with open(args.schema_file, "r") as schema_file:
+                    # schema_file is either:
+                    # 1) a Json file generated by a call to pipeline.serializeToJson(),
+                    # 2) a log file generated by running the user program with DEPTHAI_LEVEL set to debug
 
+                    # Are we in case 1) ?
+                    try:
+                        schema = json.load(schema_file)
+                        if 'pipeline' not in schema:
+                            print(f"Json file '{args.schema_file}' is missing 'pipeline' key")
+                            exit(1)
+                        schema = schema['pipeline']
+                        print("Pipeline schema retrieved")
+                    except json.decoder.JSONDecodeError:
+                        # schema_file is not a Json file, so we are probably in case 2)
+                        # we are looking for  a line:  ... [debug] Schema dump: {"connections":[{"node1Id":1...
+                        schema_file.seek(0) # Rewind the file
+                        while True:
+                            line = schema_file.readline()
+                            if len(line) == 0:
+                                # End of file
+                                print("\nSomething went wrong, the schema could not be extracted")
+                                exit(1)
+                            match = re.match(r'.* Schema dump: (.*)', line)
+                            if match:
+                                schema_str = match.group(1)
+                                print("Pipeline schema retrieved")
+                                break
+                        schema = json.loads(schema_str)
+
+            if args.verbose:
+                print('Schema:', schema)
+
+            self.create_graph(schema)
+
+    def new_trace_log(self, msg: dai.LogMessage):
+        self.new_trace_text(msg.payload)
+    def new_trace_text(self, txt):
+        # we are looking for  a line: EV:  ...
+        match = re.search(r'EV:([0-9]+),S:([0-9]+),IDS:([0-9]+),IDD:([0-9]+),TSS:([0-9]+),TSN:([0-9]+)', txt.rstrip('\n'))
+        if match:
+            print('new trace event', txt)
+            trace_event = TraceEvent()
+
+            trace_event.event = int(match.group(1))
+            trace_event.status = int(match.group(2))
+            trace_event.src_id = match.group(3)
+            trace_event.dst_id = match.group(4)
+            trace_event.timestamp = int(match.group(5)) + (int(match.group(6)) / 1000000000.0)
+            trace_event.host_timestamp = time.time()
+
+
+            if trace_event.status == 1: # END, START=0
+                print('status', trace_event.status)
+                link = self.links[trace_event.src_id][trace_event.dst_id]
+                print('link', link)
+                link.new_event(trace_event.event)
+
+
+    def traceEventReader(self):
+        # local_event_buffer = []
+        while self.process.poll() is None:
+            line = self.process.stdout.readline()
+            if args.verbose:
+                print(line.rstrip('\n'))
+            self.new_trace_text(line)
+
+    def create_graph(self, schema: Dict, device: dai.Device = None):
 
         dai_connections = schema['connections']
 
-        class NodePort:
-            name: str
-            port: Any # QT port object
-            node: Dict # From schema
-            type: int # Inout or output
-            dai_node: Any
-            group_name: str # Not sure
-
-            def is_input(self) -> bool:
-                return self.type == 3
-            def is_output(self) -> bool:
-                return self.type == 0
-            def find_node(self, node_id: int, group_name: str, port_name: str) -> bool:
-                return self.name == port_name and self.dai_node['id'] == node_id and self.group_name == group_name
-            def __str__(self):
-                return f"NodeId {self.dai_node['id']}, Port {self.name}"
-
-
-        ports: Dict[int, NodePort] = {}
+        ports: List[NodePort] = []
         for n in schema['nodes']:
             dict_n = n[1]
             node_name = dict_n['name']
 
             # Create the node
-            qt_node = graph.create_node('dai.DepthaiNode', name=node_name, color=node_color.get(node_name, default_node_color), text_color=(0,0,0), push_undo=False)
+            qt_node = self.graph.create_node('dai.DepthaiNode',
+                                             name=node_name,
+                                             color=self.node_color.get(node_name, self.default_node_color),
+                                             text_color=(0,0,0),
+                                             push_undo=False)
 
             # Alphabetic order
             ioInfo = list(sorted(dict_n['ioInfo'], key = lambda el: el[0][1]))
@@ -257,6 +284,7 @@ def main():
                 p.type = dict_io['type'] # Input/Output
                 p.node = qt_node
                 p.dai_node = n[1]
+                p.id = str(io_id)
                 p.group_name = port_group
 
                 if p.is_input(): # Input
@@ -268,8 +296,9 @@ def main():
                 else:
                     print('Unhandled case!')
 
-                ports[io_id] = p
+                ports.append(p)
 
+        self.links = dict()
         for i, c in enumerate(dai_connections):
             src_node_id = c["node1Id"]
             src_name = c["node1Output"]
@@ -278,70 +307,71 @@ def main():
             dst_name = c["node2Input"]
             dst_group = c["node2InputGroup"]
 
-            src_port = [p for n,p in ports.items() if p.find_node(src_node_id, src_group, src_name)][0]
-            dst_port = [p for n, p in ports.items() if p.find_node(dst_node_id, dst_group, dst_name)][0]
+            src_port = [p for p in ports if p.find_node(src_node_id, src_group, src_name)][0]
+            dst_port = [p for p in ports if p.find_node(dst_node_id, dst_group, dst_name)][0]
 
             print(f"[{i}] {src_port} -> {dst_port}")
-            src_port.port.connect_to(dst_port.port, push_undo=False)
+            link = src_port.port.connect_to(dst_port.port, push_undo=False)
+
+            if src_port.id not in self.links:
+                self.links[src_port.id] = {}
+            self.links[src_port.id][dst_port.id] = link
+
 
         # Lock the ports
-        graph.lock_all_ports()
+        self.graph.lock_all_ports()
 
-        graph_widget.show()
-        graph.auto_layout_nodes()
-        graph.fit_to_selection()
-        graph.set_zoom(-0.9)
-        graph.clear_selection()
-        graph.clear_undo_stack()
-
-        def traceEventReader(proc, buffer):
-            # local_event_buffer = []
-            while proc.poll() is None:
-                line = proc.stdout.readline()
-                if args.verbose:
-                    print(line.rstrip('\n'))
-                # we are looking for  a line: EV:  ...
-                match = re.search(r'EV:([0-9]+),S:([0-9]+),IDS:([0-9]+),IDD:([0-9]+),TSS:([0-9]+),TSN:([0-9]+)', line.rstrip('\n'))
-                if match:
-                    trace_event = TraceEvent()
-
-                    trace_event.event = int(match.group(1))
-                    trace_event.status = int(match.group(2))
-                    trace_event.src_id = int(match.group(3))
-                    trace_event.dst_id = int(match.group(4))
-                    trace_event.timestamp = int(match.group(5)) + (int(match.group(6)) / 1000000000.0)
-                    trace_event.host_timestamp = time.time()
-
-                    buffer.append(trace_event)
-                    buffer.sort(key=lambda event: event.timestamp)
+        self.graph_widget.show()
+        self.graph.auto_layout_nodes()
+        self.graph.fit_to_selection()
+        self.graph.set_zoom(-0.9)
+        self.graph.clear_selection()
+        self.graph.clear_undo_stack()
 
 
-        line_buffer = ''
-        event_buffer = []
-        class TraceEvent():
-            event = 0
-            status = 0
-            src_id = 0
-            dst_id = 0
-            timestamp = 0.0
-            host_timestamp = 0.0
-        if process is not None:
-            reading_thread = Thread(target=traceEventReader, args=(process, event_buffer,))
+        if self.process is not None: # Arg tool
+            reading_thread = Thread(target=self.traceEventReader, args=())
             reading_thread.start()
+        else:
+            # device.setLogOutputLevel(dai.LogLevel.TRACE)
+            device.setLogLevel(dai.LogLevel.TRACE)
+            device.addLogCallback(self.new_trace_log)
 
+    def update(self): # Called by main loop (on main Thread)
+        for src_name, dst_ports in self.links.items():
+            for dst_name, link in dst_ports.items():
+                link.update_fps() # Update text
 
-        while True:
-            app.processEvents()
+        self.app.processEvents()
+        print('processEvents from main')
 
-            # TODO(themarpe) - move event processing to a separate function
-            # Process trace events
-
-            if len(event_buffer) > 0 and time.time() - event_buffer[-1].host_timestamp > 0.2: # atleast 200ms should pass from latest event received
-                # TODO(themarpe) - Process events
-                pass
-
-
-        app.exec_()
-
+# Run as standalone tool
 if __name__ == "__main__":
-    main()
+    parser = ArgumentParser()
+    subparsers = parser.add_subparsers(help="Action", required=True, dest="action")
+
+    run_parser = subparsers.add_parser("run",
+                                       help="Run your depthai program to create the corresponding pipeline graph")
+    run_parser.add_argument('command', type=str,
+                            help="The command with its arguments between ' or \" (ex: python script.py -i file)")
+    run_parser.add_argument("-dnk", "--do_not_kill", action="store_true",
+                            help="Don't terminate the command when the schema string has been retrieved")
+    run_parser.add_argument("-var", "--use_variable_names", action="store_true",
+                            help="Use the variable names from the python code to name the graph nodes")
+    run_parser.add_argument("-p", "--pipeline_name", type=str, default="pipeline",
+                            help="Name of the pipeline variable in the python code (default=%(default)s)")
+    run_parser.add_argument('-v', '--verbose', action="store_true",
+                            help="Show on the console the command output")
+
+    from_file_parser = subparsers.add_parser("from_file",
+                                             help="Create the pipeline graph by parsing a file containing the schema (log file generated with DEPTHAI_LEVEL=debug or Json file generated by pipeline.serializeToJSon())")
+    from_file_parser.add_argument("schema_file",
+                                  help="Path of the file containing the schema")
+
+    load_parser = subparsers.add_parser("load", help="Load a previously saved pipeline graph")
+    load_parser.add_argument("json_file",
+                             help="Path of the .json file")
+    args = parser.parse_args()
+
+    p = PipelineGraph()
+    p.main(args)
