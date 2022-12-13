@@ -617,7 +617,7 @@ class NodeItem(AbstractNodeItem):
         """
         return list(self._output_items.keys())
 
-    def _add_port(self, port):
+    def _add_port(self, port, type: str):
         """
         Adds a port qgraphics item into the node.
 
@@ -627,11 +627,15 @@ class NodeItem(AbstractNodeItem):
         Returns:
             PortItem: port qgraphics item.
         """
-        text = QtWidgets.QGraphicsTextItem(port.name, self)
+        name = port.name + "" if type == 'out' else " (FPS: 0.00)"
+        text = QtWidgets.QGraphicsTextItem(name, self)
         text.font().setPointSize(8)
         text.setFont(text.font())
         text.setVisible(port.display_name)
         text.setCacheMode(ITEM_CACHE_MODE)
+
+        port.set_graphic_text(text, port.name)
+
         if port.port_type == PortTypeEnum.IN.value:
             self._input_items[port] = text
         elif port.port_type == PortTypeEnum.OUT.value:
@@ -665,7 +669,7 @@ class NodeItem(AbstractNodeItem):
         port.multi_connection = multi_port
         port.display_name = display_name
         port.locked = locked
-        return self._add_port(port)
+        return self._add_port(port, port.port_type)
 
     def add_output(self, name='output', multi_port=False, display_name=True,
                    locked=False, painter_func=None):
@@ -692,7 +696,7 @@ class NodeItem(AbstractNodeItem):
         port.multi_connection = multi_port
         port.display_name = display_name
         port.locked = locked
-        return self._add_port(port)
+        return self._add_port(port, port.port_type)
 
     def _delete_port(self, port, text):
         """

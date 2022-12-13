@@ -44,7 +44,7 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
         self.setCacheMode(ITEM_CACHE_MODE)
 
         def create_fps_txt(location):
-            text = QtWidgets.QGraphicsTextItem(f"i: 0", self)
+            text = QtWidgets.QGraphicsTextItem(f"FPS: 0", self)
             text.font().setPointSize(10)
             text.setFont(text.font())
             text.setVisible(True)
@@ -52,14 +52,8 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
             text.setPos(*location)
             return text
 
-        self.fps_text = {
-            'send': create_fps_txt(self._fps_location('send')),
-            'receive': create_fps_txt(self._fps_location('receive'))
-        }
-        self.fps = {
-            'send': FPSHandler(),
-            'receive': FPSHandler()
-        }
+        self.fps_text = create_fps_txt(self._fps_location())
+        self.fps =  FPSHandler()
 
     def __repr__(self):
         in_name = self._input_port.name if self._input_port else ''
@@ -80,32 +74,26 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
         if self.isSelected():
             self.highlight()
 
-    def _fps_location(self, name):
-        percentage = 0.9 if name == 'send' else 0.2
+    def _fps_location(self,):
+        percentage = 0.6
         x = self.path().pointAtPercent(percentage).x()
         y = self.path().pointAtPercent(percentage).y()
         return (x,y)
 
     def new_event(self, sender):
-        name = 'send' if sender else 'receive'
-        self.fps[name].nextIter()
-        print('current fps', self.fps[name].fps())
+        if sender == 0:
+            self.fps.nextIter()
+        else:
+            self.input_port.new_event()
 
     def update_fps(self):
-        for name in ['send', 'receive']:
-            pos = self._fps_location(name)
-            self.fps_text[name].setPos(*pos)
-            self.fps_text[name].setPlainText("FPS: {:.1f}".format(self.fps[name].fps()))
+        pos = self._fps_location()
+        self.fps_text.setPos(*pos)
+        self.fps_text.setPlainText("FPS: {:.1f}".format(self.fps.fps()))
 
-    def paint_fps(self, painter):
-        """
-        Draws FPS of the pipe/connection
-        """
-        def draw_fps(percent, fps: float):
-            x = self.path().pointAtPercent(percent).x()
-            y = self.path().pointAtPercent(percent).y()
+        self.input_port.update_fps()
 
-            painter.drawText(QtCore.QPointF(x, y), "{:.1f} FPS".format(fps))
+
 
     def paint(self, painter, option, widget):
         """
@@ -151,9 +139,6 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
         painter.setPen(pen)
         painter.setRenderHint(painter.Antialiasing, True)
         painter.drawPath(self.path())
-
-        self.paint_fps(painter)
-
 
         # draw arrow
         if self.input_port and self.output_port:

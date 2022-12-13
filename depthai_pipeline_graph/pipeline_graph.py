@@ -36,12 +36,16 @@ class TraceEvent():
 class NodePort:
     id: str # Id of the port
     name: str # preview, out, video...
-    port: Any  # QT port object
+    port: Any = None  # QT port object
     node: Dict  # From json schema
     type: int  # Input or output
     dai_node: Any
     group_name: str  # Not sure
+    blocking: bool
+    queue_size: int
 
+    def create(self) -> bool:
+        return self.port is None
     def is_input(self) -> bool:
         return self.type == 3
 
@@ -52,7 +56,7 @@ class NodePort:
         return self.name == port_name and self.dai_node['id'] == node_id and self.group_name == group_name
 
     def __str__(self):
-        return f"NodeId {self.dai_node['id']}, Port {self.name}"
+        return f"{self.dai_node['name']}.{self.name} ({self.id})"
 
 
 class PipelineGraph:
@@ -92,7 +96,6 @@ class PipelineGraph:
     links: Dict[str, Dict[str, Any]]
 
     def __init__(self):
-
         # handle SIGINT to make the app terminate on CTRL+C
         signal.signal(signal.SIGINT, signal.SIG_DFL)
 
@@ -107,15 +110,20 @@ class PipelineGraph:
 
         self.graph.register_node(DepthaiNode)
 
-
-        # create a node properties bin widget.
+        # TODO: show node properties via properties bin widget
         self.properties_bin = PropertiesBinWidget(node_graph=self.graph)
         self.properties_bin.setWindowFlags(QtCore.Qt.Tool)
 
         # show the node properties bin widget when a node is double-clicked.
         def display_properties_bin(node):
             if not self.properties_bin.isVisible():
-                self.properties_bin.show()
+                for p in self.ports:
+                    if p.node == node:
+                        txt = json.dumps(p.dai_node, sort_keys=True, indent=4, separators=(',', ': '))
+                        self.properties_bin.node_clicked(txt)
+                        self.properties_bin.show()
+                        return
+
         # wire function to "node_double_clicked" signal.
         self.graph.node_double_clicked.connect(display_properties_bin)
 
@@ -123,8 +131,7 @@ class PipelineGraph:
         self.graph_widget = self.graph.widget
         self.graph_widget.resize(1100, 800)
 
-    def main(self, args):
-
+    def cmd_tool(self, args):
         if args.action == "load":
             self.graph_widget.show()
             self.graph.load_session(args.json)
@@ -224,7 +231,6 @@ class PipelineGraph:
         # we are looking for  a line: EV:  ...
         match = re.search(r'EV:([0-9]+),S:([0-9]+),IDS:([0-9]+),IDD:([0-9]+),TSS:([0-9]+),TSN:([0-9]+)', txt.rstrip('\n'))
         if match:
-            print('new trace event', txt)
             trace_event = TraceEvent()
 
             trace_event.event = int(match.group(1))
@@ -235,68 +241,64 @@ class PipelineGraph:
             trace_event.host_timestamp = time.time()
 
 
-            if trace_event.status == 1: # END, START=0
-                print('status', trace_event.status)
-                link = self.links[trace_event.src_id][trace_event.dst_id]
-                print('link', link)
+            if trace_event.status == 0 and trace_event.event == 0: # START event, send
+                link = self.links[trace_event.dst_id][trace_event.src_id]
                 link.new_event(trace_event.event)
+            elif trace_event.status == 1 and trace_event.event == 1: # END event, receive
+                for id, link in self.links[trace_event.src_id].items():
+                    # SrcId is none, we can just take the first dst it
+                    link.new_event(trace_event.event)
+                    break
 
 
     def traceEventReader(self):
         # local_event_buffer = []
         while self.process.poll() is None:
             line = self.process.stdout.readline()
-            if args.verbose:
-                print(line.rstrip('\n'))
             self.new_trace_text(line)
 
     def create_graph(self, schema: Dict, device: dai.Device = None):
 
         dai_connections = schema['connections']
 
-        ports: List[NodePort] = []
+        self.ports: List[NodePort] = []
+        start_nodes = []
         for n in schema['nodes']:
             dict_n = n[1]
+            dict_n['ioInfo'] = [el[1] for el in dict_n['ioInfo']]
+
             node_name = dict_n['name']
 
             # Create the node
             qt_node = self.graph.create_node('dai.DepthaiNode',
                                              name=node_name,
+                                             selected=False,
                                              color=self.node_color.get(node_name, self.default_node_color),
                                              text_color=(0,0,0),
                                              push_undo=False)
 
-            # Alphabetic order
-            ioInfo = list(sorted(dict_n['ioInfo'], key = lambda el: el[0][1]))
+            if node_name in ['ColorCamera', 'MonoCamera', 'XLinkIn']:
+                start_nodes.append(qt_node)
 
-            for io in ioInfo:
-                dict_io = io[1]
-                io_id = dict_io['id']
+            # Alphabetic order
+            ioInfo = list(sorted(dict_n['ioInfo'], key = lambda el: el['name']))
+
+            for dict_io in ioInfo:
                 port_name = dict_io['name']
                 port_group = dict_io['group']
                 if port_group:
                     port_name = f"{dict_io['group']}[{port_name}]"
-                blocking = dict_io['blocking']
-                queue_size = dict_io['queueSize']
 
                 p = NodePort()
                 p.name = port_name
                 p.type = dict_io['type'] # Input/Output
                 p.node = qt_node
                 p.dai_node = n[1]
-                p.id = str(io_id)
+                p.id = str(dict_io['id'])
                 p.group_name = port_group
-
-                if p.is_input(): # Input
-                    port_color = (249, 75, 0) if blocking else (0, 255, 0)
-                    port_label = f"[{queue_size}] {port_name}"
-                    p.port = qt_node.add_input(name=port_label, color=port_color, multi_input=True)
-                elif p.is_output(): # Output
-                    p.port = qt_node.add_output(name=port_name)
-                else:
-                    print('Unhandled case!')
-
-                ports.append(p)
+                p.blocking = dict_io['blocking']
+                p.queue_size = dict_io['queueSize']
+                self.ports.append(p)
 
         self.links = dict()
         for i, c in enumerate(dai_connections):
@@ -307,26 +309,35 @@ class PipelineGraph:
             dst_name = c["node2Input"]
             dst_group = c["node2InputGroup"]
 
-            src_port = [p for p in ports if p.find_node(src_node_id, src_group, src_name)][0]
-            dst_port = [p for p in ports if p.find_node(dst_node_id, dst_group, dst_name)][0]
+            src_port = [p for p in self.ports if p.find_node(src_node_id, src_group, src_name)][0]
+            dst_port = [p for p in self.ports if p.find_node(dst_node_id, dst_group, dst_name)][0]
 
-            print(f"[{i}] {src_port} -> {dst_port}")
+            if src_port.create():  # Output
+                src_port.port = src_port.node.add_output(name=src_port.name, color=(50,50,255))
+            if dst_port.create(): # Input
+                port_color = (249, 75, 0) if dst_port.blocking else (0, 255, 0)
+                port_label = f"[{dst_port.queue_size}] {dst_port.name}"
+                dst_port.port = dst_port.node.add_input(name=port_label, color=port_color, multi_input=True)
+
+            print(f"{i}. {src_port} -> {dst_port}")
             link = src_port.port.connect_to(dst_port.port, push_undo=False)
 
-            if src_port.id not in self.links:
-                self.links[src_port.id] = {}
-            self.links[src_port.id][dst_port.id] = link
-
+            if dst_port.id not in self.links:
+                self.links[dst_port.id] = {}
+            self.links[dst_port.id][src_port.id] = link
 
         # Lock the ports
         self.graph.lock_all_ports()
 
         self.graph_widget.show()
-        self.graph.auto_layout_nodes()
+        self.graph.auto_layout_nodes(start_nodes=start_nodes)
         self.graph.fit_to_selection()
         self.graph.set_zoom(-0.9)
         self.graph.clear_selection()
         self.graph.clear_undo_stack()
+
+        self.app.processEvents()
+        self.graph.auto_layout_nodes()
 
 
         if self.process is not None: # Arg tool
@@ -338,15 +349,13 @@ class PipelineGraph:
             device.addLogCallback(self.new_trace_log)
 
     def update(self): # Called by main loop (on main Thread)
-        for src_name, dst_ports in self.links.items():
-            for dst_name, link in dst_ports.items():
+        for _, ports in self.links.items():
+            for _, link in ports.items():
                 link.update_fps() # Update text
 
         self.app.processEvents()
-        print('processEvents from main')
 
-# Run as standalone tool
-if __name__ == "__main__":
+def main():
     parser = ArgumentParser()
     subparsers = parser.add_subparsers(help="Action", required=True, dest="action")
 
@@ -374,4 +383,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     p = PipelineGraph()
-    p.main(args)
+    p.cmd_tool(args)
+
+    while True:
+        p.update()
+        time.sleep(0.001)
+
+# Run as standalone tool
+if __name__ == "__main__":
+    main()

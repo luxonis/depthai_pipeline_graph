@@ -5,12 +5,13 @@ from ..constants import (
     PortTypeEnum, PortEnum,
     Z_VAL_PORT,
     ITEM_CACHE_MODE)
-
+from depthai_sdk import FPSHandler
 
 class PortItem(QtWidgets.QGraphicsItem):
     """
     Base Port Item.
     """
+    text: QtWidgets.QGraphicsTextItem # Text/name of the port
 
     def __init__(self, parent=None):
         super(PortItem, self).__init__(parent)
@@ -31,6 +32,8 @@ class PortItem(QtWidgets.QGraphicsItem):
         self._port_type = None
         self._multi_connection = False
         self._locked = False
+        self.fps = FPSHandler()
+
 
     def __str__(self):
         return '{}.PortItem("{}")'.format(self.__module__, self.name)
@@ -42,6 +45,10 @@ class PortItem(QtWidgets.QGraphicsItem):
         return QtCore.QRectF(0.0, 0.0,
                              self._width + PortEnum.CLICK_FALLOFF.value,
                              self._height)
+
+    def set_graphic_text(self, text: QtWidgets.QGraphicsTextItem, port_name: str):
+        self.fps_text = text
+        self.port_name = port_name
 
     def paint(self, painter, option, widget):
         """
@@ -113,6 +120,12 @@ class PortItem(QtWidgets.QGraphicsItem):
         #                          w, h)
             # painter.drawEllipse(rect)
         painter.restore()
+
+    def new_event(self):
+        self.fps.nextIter()
+
+    def update_fps(self):
+        self.fps_text.setPlainText(f"{self.port_name} (FPS: {self.fps.fps():.1f})")
 
     def itemChange(self, change, value):
         if change == self.ItemScenePositionHasChanged:
