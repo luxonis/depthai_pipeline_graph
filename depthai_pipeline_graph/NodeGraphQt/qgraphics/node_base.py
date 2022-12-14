@@ -627,7 +627,7 @@ class NodeItem(AbstractNodeItem):
         Returns:
             PortItem: port qgraphics item.
         """
-        name = port.name + "" if type == 'out' else " (FPS: 0.00)"
+        name = port.name + ("" if type == 'out' else " (FPS: 0.00)")
         text = QtWidgets.QGraphicsTextItem(name, self)
         text.font().setPointSize(8)
         text.setFont(text.font())
@@ -993,7 +993,7 @@ class NodeItemVertical(NodeItem):
                 widget_width = widget.boundingRect().width()
             widget_height += widget.boundingRect().height()
 
-        width = max([p_input_width, p_output_width, widget_width]) + add_w
+        width = max([p_input_width + p_output_width, widget_width]) + add_w
         height = p_input_height + p_output_height + widget_height + add_h
         return width, height
 

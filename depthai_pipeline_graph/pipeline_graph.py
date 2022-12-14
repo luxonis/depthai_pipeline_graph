@@ -40,9 +40,12 @@ class NodePort:
     node: Dict  # From json schema
     type: int  # Input or output
     dai_node: Any
-    group_name: str  # Not sure
+    group_name: str
     blocking: bool
     queue_size: int
+
+    def nice_name(self) -> str: # For visualization
+        return f"{self.group_name}[{self.name}]" if self.group_name else self.name
 
     def create(self) -> bool:
         return self.port is None
@@ -284,18 +287,13 @@ class PipelineGraph:
             ioInfo = list(sorted(dict_n['ioInfo'], key = lambda el: el['name']))
 
             for dict_io in ioInfo:
-                port_name = dict_io['name']
-                port_group = dict_io['group']
-                if port_group:
-                    port_name = f"{dict_io['group']}[{port_name}]"
-
                 p = NodePort()
-                p.name = port_name
+                p.name = dict_io['name']
                 p.type = dict_io['type'] # Input/Output
                 p.node = qt_node
                 p.dai_node = n[1]
                 p.id = str(dict_io['id'])
-                p.group_name = port_group
+                p.group_name = dict_io['group']
                 p.blocking = dict_io['blocking']
                 p.queue_size = dict_io['queueSize']
                 self.ports.append(p)
@@ -313,10 +311,10 @@ class PipelineGraph:
             dst_port = [p for p in self.ports if p.find_node(dst_node_id, dst_group, dst_name)][0]
 
             if src_port.create():  # Output
-                src_port.port = src_port.node.add_output(name=src_port.name, color=(50,50,255))
+                src_port.port = src_port.node.add_output(name=src_port.nice_name(), color=(50,50,255))
             if dst_port.create(): # Input
                 port_color = (249, 75, 0) if dst_port.blocking else (0, 255, 0)
-                port_label = f"[{dst_port.queue_size}] {dst_port.name}"
+                port_label = f"[{dst_port.queue_size}] {dst_port.nice_name()}"
                 dst_port.port = dst_port.node.add_input(name=port_label, color=port_color, multi_input=True)
 
             print(f"{i}. {src_port} -> {dst_port}")
