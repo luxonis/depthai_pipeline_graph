@@ -244,7 +244,7 @@ class PortConnectedCmd(QtWidgets.QUndoCommand):
         src_model.connected_ports[trg_id].append(self.target.name())
         trg_model.connected_ports[src_id].append(self.source.name())
 
-        self.source.view.connect_to(self.target.view)
+        return self.source.view.connect_to(self.target.view)
 
 
 class PortDisconnectedCmd(QtWidgets.QUndoCommand):

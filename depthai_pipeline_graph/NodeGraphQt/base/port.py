@@ -276,13 +276,19 @@ class Port(object):
                 NodeInputDisconnectedCmd(self, pre_conn_port).redo()
 
 
-        # Just go without commands (undo/redo)
-        pipe = self.view.connect_to(port.view)
+        pipe = None
+        if push_undo:
+            undo_stack.push(PortConnectedCmd(self, port))
+            undo_stack.push(NodeInputConnectedCmd(self, port))
+            undo_stack.endMacro()
+        else:
+            pipe = PortConnectedCmd(self, port).redo()
+            NodeInputConnectedCmd(self, port).redo()
 
-        # emit "port_connected" signal from the parent graph.
         ports = {p.type_(): p for p in [self, port]}
         graph.port_connected.emit(ports[PortTypeEnum.IN.value],
                                   ports[PortTypeEnum.OUT.value])
+
         return pipe
 
     def disconnect_from(self, port=None, push_undo=True):
