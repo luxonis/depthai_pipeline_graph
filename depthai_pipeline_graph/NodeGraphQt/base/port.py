@@ -234,6 +234,7 @@ class Port(object):
         if not self.multi_connection() and src_conn_ports:
             pre_conn_port = src_conn_ports[0]
 
+
         if not port:
             if pre_conn_port:
                 if push_undo:
@@ -274,18 +275,21 @@ class Port(object):
                 PortDisconnectedCmd(self, pre_conn_port).redo()
                 NodeInputDisconnectedCmd(self, pre_conn_port).redo()
 
+
+        pipe = None
         if push_undo:
             undo_stack.push(PortConnectedCmd(self, port))
             undo_stack.push(NodeInputConnectedCmd(self, port))
             undo_stack.endMacro()
         else:
-            PortConnectedCmd(self, port).redo()
+            pipe = PortConnectedCmd(self, port).redo()
             NodeInputConnectedCmd(self, port).redo()
 
-        # emit "port_connected" signal from the parent graph.
         ports = {p.type_(): p for p in [self, port]}
         graph.port_connected.emit(ports[PortTypeEnum.IN.value],
                                   ports[PortTypeEnum.OUT.value])
+
+        return pipe
 
     def disconnect_from(self, port=None, push_undo=True):
         """
