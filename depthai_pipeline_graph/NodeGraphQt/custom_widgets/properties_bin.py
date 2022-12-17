@@ -1,7 +1,9 @@
 #!/usr/bin/python
+from typing import Dict
+
 from Qt import QtWidgets, QtCore, QtGui, QtCompat
 
-from ..custom_widgets.properties import NodePropWidget
+from ..custom_widgets.properties import NodePropWidget, PropLabel
 
 
 class PropertiesDelegate(QtWidgets.QStyledItemDelegate):
@@ -96,22 +98,10 @@ class PropertiesBinWidget(QtWidgets.QWidget):
         super(PropertiesBinWidget, self).__init__(parent)
         self.setWindowTitle('Node Properties')
         self._prop_list = PropertiesList()
-        # GX
-        # self._limit = QtWidgets.QSpinBox()
-        # self._limit.setToolTip('Set display nodes limit.')
-        # self._limit.setMaximum(10)
-        # self._limit.setMinimum(0)
-        # self._limit.setValue(1)
-        # self._limit.valueChanged.connect(self.__on_limit_changed)
+
         self.resize(450, 400)
-
         self._block_signal = False
-
         self._lock = False
-        # self.btn_lock = QtWidgets.QPushButton('lock')
-        # self.btn_lock.setToolTip(
-        #     'Lock the properties bin prevent nodes from being loaded.')
-        # self.btn_lock.clicked.connect(self.lock_bin)
 
         btn_clr = QtWidgets.QPushButton('Close')
         btn_clr.setToolTip('Close the properties window.')
@@ -124,15 +114,26 @@ class PropertiesBinWidget(QtWidgets.QWidget):
         # top_layout.addWidget(self.btn_lock)
         top_layout.addWidget(btn_clr)
 
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.addLayout(top_layout)
-        layout.addWidget(self._prop_list, 1)
+        self.layout = QtWidgets.QVBoxLayout(self)
+        self.layout.addLayout(top_layout)
+
+        self.text = QtWidgets.QTextEdit()
+        self.text.setAcceptRichText(True)
+        self.text.setReadOnly(True)
+
+        self.layout.addWidget(self.text, stretch=0)
+
+        # layout.addWidget(self._prop_list, 1)
 
         # wire up node graph.
         node_graph.add_properties_bin(self)
         node_graph.node_double_clicked.connect(self.add_node)
         node_graph.nodes_deleted.connect(self.__on_nodes_deleted)
         node_graph.property_changed.connect(self.__on_graph_property_changed)
+
+    def node_clicked(self, dai_node_json: str):
+        html = dai_node_json.replace('\n', '<br/>').replace(' ', '&nbsp;')
+        self.text.setHtml(html)
 
     def __repr__(self):
         return '<{} object at {}>'.format(self.__class__.__name__, hex(id(self)))
@@ -276,55 +277,3 @@ class PropertiesBinWidget(QtWidgets.QWidget):
         if itm_find:
             item = itm_find[0]
             return self._prop_list.cellWidget(item.row(), 0)
-
-
-if __name__ == '__main__':
-    import sys
-    from NodeGraphQt import BaseNode, NodeGraph
-    from NodeGraphQt.constants import (NODE_PROP_QLABEL,
-                                       NODE_PROP_QLINEEDIT,
-                                       NODE_PROP_QCOMBO,
-                                       NODE_PROP_QSPINBOX,
-                                       NODE_PROP_COLORPICKER,
-                                       NODE_PROP_SLIDER)
-
-
-    class TestNode(BaseNode):
-        NODE_NAME = 'test node'
-
-        def __init__(self):
-            super(TestNode, self).__init__()
-            self.create_property('label_test', 'foo bar',
-                                 widget_type=NODE_PROP_QLABEL)
-            self.create_property('text_edit', 'hello',
-                                 widget_type=NODE_PROP_QLINEEDIT)
-            self.create_property('color_picker', (0, 0, 255),
-                                 widget_type=NODE_PROP_COLORPICKER)
-            self.create_property('integer', 10,
-                                 widget_type=NODE_PROP_QSPINBOX)
-            self.create_property('list', 'foo',
-                                 items=['foo', 'bar'],
-                                 widget_type=NODE_PROP_QCOMBO)
-            self.create_property('range', 50,
-                                 range=(45, 55),
-                                 widget_type=NODE_PROP_SLIDER)
-
-    def prop_changed(node_id, prop_name, prop_value):
-        print('-'*100)
-        print(node_id, prop_name, prop_value)
-
-
-    app = QtWidgets.QApplication(sys.argv)
-
-    graph = NodeGraph()
-    graph.register_node(TestNode)
-
-    prop_bin = PropertiesBinWidget(node_graph=graph)
-    prop_bin.property_changed.connect(prop_changed)
-
-    node = graph.create_node('nodeGraphQt.nodes.TestNode')
-
-    prop_bin.add_node(node)
-    prop_bin.show()
-
-    app.exec_()

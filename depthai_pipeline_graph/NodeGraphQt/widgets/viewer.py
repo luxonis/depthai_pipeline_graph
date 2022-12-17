@@ -829,6 +829,7 @@ class NodeViewer(QtWidgets.QGraphicsView):
         create new pipe for the connection.
         (show the live pipe visibility from the port following the cursor position)
         """
+        return # DepthAI pipeline graph - disable live connection
         if not selected_port:
             return
         self._start_port = selected_port
@@ -861,6 +862,7 @@ class NodeViewer(QtWidgets.QGraphicsView):
             pipe.highlight()
         if not start_port.node.visible or not end_port.node.visible:
             pipe.hide()
+        return pipe
 
     @staticmethod
     def acyclic_check(start_port, end_port):
