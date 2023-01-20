@@ -1,11 +1,12 @@
 #!/usr/bin/python
 from Qt import QtGui, QtCore, QtWidgets
-from depthai_sdk import FPSHandler
 from ..constants import (
     PortTypeEnum, PortEnum,
     Z_VAL_PORT,
     ITEM_CACHE_MODE)
-from depthai_sdk import FPSHandler
+
+import time
+from depthai_pipeline_graph.trace_event import *
 
 class PortItem(QtWidgets.QGraphicsItem):
     """
@@ -32,7 +33,8 @@ class PortItem(QtWidgets.QGraphicsItem):
         self._port_type = None
         self._multi_connection = False
         self._locked = False
-        self.fps = FPSHandler()
+
+        self.fps_arr = []
 
 
     def __str__(self):
@@ -121,11 +123,16 @@ class PortItem(QtWidgets.QGraphicsItem):
             # painter.drawEllipse(rect)
         painter.restore()
 
-    def new_event(self):
-        self.fps.nextIter()
+    def new_event(self, trace: TraceEvent):
+        self.fps_arr.append(trace.host_timestamp)
 
-    def update_fps(self):
-        self.fps_text.setPlainText(f"{self.port_name} (FPS: {self.fps.fps():.1f})")
+    def update_fps(self): # Gets called from main thread
+        for i, ts in enumerate(self.fps_arr):
+            if ts + 2.0 > time.time():
+                self.fps_arr = self.fps_arr[i:]
+                break
+
+        self.fps_text.setPlainText("FPS: {:.0f}".format(len(self.fps_arr) / 2.0))
 
     def itemChange(self, change, value):
         if change == self.ItemScenePositionHasChanged:
