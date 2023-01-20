@@ -1,8 +1,5 @@
 #!/usr/bin/python
-import math
-
 from Qt import QtCore, QtGui, QtWidgets
-
 from ..constants import (
     PipeEnum, PipeLayoutEnum, PortTypeEnum, Z_VAL_PIPE,
     Z_VAL_NODE_WIDGET,
@@ -11,14 +8,15 @@ from ..constants import (
     NODE_LAYOUT_DIRECTION
 )
 from ..qgraphics.port import PortItem
-
 PIPE_STYLES = {
     PipeEnum.DRAW_TYPE_DEFAULT.value: QtCore.Qt.SolidLine,
     PipeEnum.DRAW_TYPE_DASHED.value: QtCore.Qt.DashLine,
     PipeEnum.DRAW_TYPE_DOTTED.value: QtCore.Qt.DotLine
 }
 
-from depthai_sdk import FPSHandler
+import math
+import time
+from depthai_pipeline_graph.trace_event import *
 
 class PipeItem(QtWidgets.QGraphicsPathItem):
     """
@@ -44,7 +42,7 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
         self.setCacheMode(ITEM_CACHE_MODE)
 
         def create_fps_txt(location):
-            text = QtWidgets.QGraphicsTextItem(f"FPS: 0", self)
+            text = QtWidgets.QGraphicsTextItem("FPS: 0", self)
             text.font().setPointSize(10)
             text.setFont(text.font())
             text.setVisible(True)
@@ -53,7 +51,7 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
             return text
 
         self.fps_text = create_fps_txt(self._fps_location())
-        self.fps =  FPSHandler()
+        self.fps_arr = []
 
     def __repr__(self):
         in_name = self._input_port.name if self._input_port else ''
@@ -80,16 +78,26 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
         y = self.path().pointAtPercent(percentage).y()
         return (x,y)
 
-    def new_event(self, sender):
-        if sender == 0:
-            self.fps.nextIter()
+    def new_event(self, trace: TraceEvent):
+        if trace.event == EventEnum.SEND:
+            self.fps_arr.append(trace.host_timestamp)
+        elif trace.event == EventEnum.RECEIVE:
+            self.input_port.new_event(trace)
+        elif trace.event == EventEnum.PULL:
+            raise Exception('Event enum PULL not yet supported by Pipeline Graph!')
         else:
-            self.input_port.new_event()
+            raise Exception('Unknown Event!')
 
     def update_fps(self):
         pos = self._fps_location()
         self.fps_text.setPos(*pos)
-        self.fps_text.setPlainText("FPS: {:.1f}".format(self.fps.fps()))
+
+        for i, ts in enumerate(self.fps_arr):
+            if ts + 2.0 > time.time():
+                self.fps_arr = self.fps_arr[i:]
+                break
+
+        self.fps_text.setPlainText("FPS: {:.0f}".format(len(self.fps_arr)/2.0))
 
         self.input_port.update_fps()
 

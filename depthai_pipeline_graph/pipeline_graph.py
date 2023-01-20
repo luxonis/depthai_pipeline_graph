@@ -11,7 +11,7 @@ import json
 import time
 from threading import Thread
 from typing import Any, Dict, List
-
+from .trace_event import *
 
 class DepthaiNode(BaseNode):
     # unique node identifier.
@@ -24,14 +24,6 @@ class DepthaiNode(BaseNode):
         super(DepthaiNode, self).__init__()
         # create QLineEdit text input widget.
         # self.add_text_input('my_input', 'Text Input', tab='widgets')
-
-class TraceEvent():
-    event: int
-    status: int
-    src_id: str
-    dst_id: str
-    timestamp = 0.0
-    host_timestamp = 0.0
 
 class NodePort:
     id: str # Id of the port
@@ -236,21 +228,20 @@ class PipelineGraph:
         if match:
             trace_event = TraceEvent()
 
-            trace_event.event = int(match.group(1))
-            trace_event.status = int(match.group(2))
+            trace_event.event = EventEnum(int(match.group(1)))
+            trace_event.status = StatusEnum(int(match.group(2)))
             trace_event.src_id = match.group(3)
             trace_event.dst_id = match.group(4)
             trace_event.timestamp = int(match.group(5)) + (int(match.group(6)) / 1000000000.0)
             trace_event.host_timestamp = time.time()
 
-
-            if trace_event.status == 0 and trace_event.event == 0: # START event, send
+            if trace_event.status == StatusEnum.START and trace_event.event == EventEnum.SEND:
                 link = self.links[trace_event.dst_id][trace_event.src_id]
-                link.new_event(trace_event.event)
-            elif trace_event.status == 1 and trace_event.event == 1: # END event, receive
+                link.new_event(trace_event)
+            elif trace_event.status == StatusEnum.END and trace_event.event == EventEnum.RECEIVE:
                 for id, link in self.links[trace_event.src_id].items():
                     # SrcId is none, we can just take the first dst it
-                    link.new_event(trace_event.event)
+                    link.new_event(trace_event)
                     break
 
 
