@@ -11,7 +11,7 @@ import json
 import time
 from threading import Thread
 from typing import Any, Dict, List
-from .trace_event import *
+from .NodeGraphQt.trace_event import *
 
 class DepthaiNode(BaseNode):
     # unique node identifier.
@@ -222,12 +222,12 @@ class PipelineGraph:
 
     def new_trace_log(self, msg: dai.LogMessage):
         self.new_trace_text(msg.payload)
+
     def new_trace_text(self, txt):
         # we are looking for  a line: EV:  ...
         match = re.search(r'EV:([0-9]+),S:([0-9]+),IDS:([0-9]+),IDD:([0-9]+),TSS:([0-9]+),TSN:([0-9]+)', txt.rstrip('\n'))
         if match:
             trace_event = TraceEvent()
-
             trace_event.event = EventEnum(int(match.group(1)))
             trace_event.status = StatusEnum(int(match.group(2)))
             trace_event.src_id = match.group(3)

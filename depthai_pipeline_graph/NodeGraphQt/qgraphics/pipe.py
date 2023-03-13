@@ -16,7 +16,7 @@ PIPE_STYLES = {
 
 import math
 import time
-from depthai_pipeline_graph.trace_event import *
+from  ..trace_event import *
 
 class PipeItem(QtWidgets.QGraphicsPathItem):
     """
@@ -72,7 +72,7 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
         if self.isSelected():
             self.highlight()
 
-    def _fps_location(self,):
+    def _fps_location(self):
         percentage = 0.6
         x = self.path().pointAtPercent(percentage).x()
         y = self.path().pointAtPercent(percentage).y()

@@ -6,7 +6,7 @@ from ..constants import (
     ITEM_CACHE_MODE)
 
 import time
-from depthai_pipeline_graph.trace_event import *
+from ..trace_event import *
 
 class PortItem(QtWidgets.QGraphicsItem):
     """
