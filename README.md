@@ -1,15 +1,11 @@
-# DepthAI Pipeline Graph [Experimental]
+# DepthAI Pipeline Graph
 
-A tool that dynamically creates graphs of [DepthAI pipelines](https://docs.luxonis.com/projects/api/en/latest/components/pipeline/). 
-<br>
-I have created this tool to help me in documenting some of my DepthAI repositories, but it is also useful to quickly get some high-level view of existing DepthAI programs without reading the code.
-<br> 
+A tool that dynamically creates graphs of [DepthAI pipelines](https://docs.luxonis.com/projects/api/en/latest/components/pipeline/). It is an **ideal tool for debugging**, as it provides insight into the pipeline and its inner workings. The original author of this tool is [geaxgx](https://github.com/geaxgx), Luxonis has updated some features and added FPS counting.
 
-
-<p align="center"> <img  src="media/graph_human_machine_safety.png" alt="Graph of depthai-experiments/gen2-human-machine-safety"></p>
+![Graph of Age-Gender demo](media/age-gender-demo.jpg)
 
 ## How it works ?
-In the DepthAI context, a pipeline is a collection of nodes and links between them. 
+In the DepthAI context, a pipeline is a collection of nodes and links between them.
 In your code, after defining your pipeline, you usually pass your pipeline to the device, with a call similar to:
 ```
 device.startPipeline(pipeline)
@@ -37,7 +33,7 @@ By analyzing the printed schema dump, it is then possible to retrieve the nodes 
 ## Install
 
 ```
-pip install git+https://github.com/geaxgx/depthai_pipeline_graph.git
+pip install git+https://github.com/luxonis/depthai_pipeline_graph.git
 ```
 If not already present, the command above will install the python module Qt.py. Qt.py enables you to write software that runs on any of the 4 supported bindings - PySide2, PyQt5, PySide and PyQt4. If none of these binding is installed, you will get an error message when running `pipeline_graph`: 
 ```
