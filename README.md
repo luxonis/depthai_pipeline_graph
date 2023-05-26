@@ -2,7 +2,7 @@
 
 A tool that dynamically creates graphs of [DepthAI pipelines](https://docs.luxonis.com/projects/api/en/latest/components/pipeline/). It is an **ideal tool for debugging**, as it provides insight into the pipeline and its inner workings. The original author of this tool is [geaxgx](https://github.com/geaxgx), Luxonis has updated some features and added FPS counting.
 
-![Graph of Age-Gender demo](media/age-gender-demo.jpg)
+![Graph of Age-Gender demo](https://github.com/luxonis/depthai_pipeline_graph/assets/18037362/dde3b10f-c006-456c-8927-366b5afce508)
 
 ## How it works ?
 In the DepthAI context, a pipeline is a collection of nodes and links between them.
