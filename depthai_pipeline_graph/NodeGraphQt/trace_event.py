@@ -17,5 +17,13 @@ class TraceEvent():
     dst_id: str
     timestamp = 0.0
     host_timestamp = 0.0
+    queue_size: str
+
+class NodeTraceEvent():
+    node_id: str
+    time_to_get = 0.0
+    time_to_process = 0.0
+    time_to_send = 0.0
+    time_total = 0.0
 
 

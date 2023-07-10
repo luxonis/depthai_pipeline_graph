@@ -938,6 +938,7 @@ class NodeGraph(QtCore.QObject):
             node.NODE_NAME = self.get_unique_name(name or node.NODE_NAME)
             node.model.name = node.NODE_NAME
             node.model.selected = selected
+            node.ORIGINAL_NAME = node.NODE_NAME
 
             def format_color(clr):
                 if isinstance(clr, str):

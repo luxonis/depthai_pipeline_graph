@@ -12,6 +12,21 @@ import time
 from threading import Thread
 from typing import Any, Dict, List
 from .NodeGraphQt.trace_event import *
+import collections
+
+class Duration:
+    def __init__(self, window_size=3):
+        self.dq = collections.deque(maxlen=window_size)
+        self.average = 0
+
+    def update(self, timestamp=None):
+        count = len(self.dq)
+        # Return sum / count if count > 0
+        if count > 0: self.average = sum(self.dq) / count
+        self.dq.append(timestamp)
+
+    def get(self):
+        return float(self.average)
 
 class DepthaiNode(BaseNode):
     # unique node identifier.
@@ -22,8 +37,33 @@ class DepthaiNode(BaseNode):
 
     def __init__(self):
         super(DepthaiNode, self).__init__()
-        # create QLineEdit text input widget.
-        # self.add_text_input('my_input', 'Text Input', tab='widgets')
+        self.original_name = self.NODE_NAME
+        self.get_frames_times = Duration()
+        self.process_frames_times = Duration()
+        self.send_frames_times = Duration()
+        self.total_times = Duration()
+        self.updated = False
+
+    def new_event(self, node_trace_event: NodeTraceEvent):
+        self.get_frames_times.update(node_trace_event.time_to_get)
+        self.process_frames_times.update(node_trace_event.time_to_process)
+        self.send_frames_times.update(node_trace_event.time_to_send)
+        self.total_times.update(node_trace_event.time_total)
+    def update_events(self):
+        # Convert to ms
+        t_to_get = self.get_frames_times.get() * 1000
+        t_to_proc = self.process_frames_times.get() * 1000
+        t_to_send = self.send_frames_times.get() * 1000
+        t_total = self.total_times.get() * 1000
+
+        new_name = f"{self.ORIGINAL_NAME}-G:{t_to_get:03.0f},P:{t_to_proc:03.0f},S:{t_to_send:03.0f},T:{t_total:03.0f}"
+        self.set_name(new_name)
+        if not self.updated:
+            self.updated = True
+            self.update()
+            self.draw()
+
+
 
 class NodePort:
     id: str # Id of the port
@@ -125,7 +165,7 @@ class PipelineGraph:
         # show the node graph widget.
         self.graph_widget = self.graph.widget
         self.graph_widget.resize(1100, 800)
-
+        self.nodes = {}
     def cmd_tool(self, args):
         if args.action == "load":
             self.graph_widget.show()
@@ -160,7 +200,7 @@ class PipelineGraph:
                     line = self.process.stdout.readline()
                     record_output += line
                     if args.verbose:
-                        print(line.rstrip('\n'))
+                        print(line.rstrqip('\n'))
                     # we are looking for  a line:  ... [debug] Schema dump: {"connections":[{"node1Id":1...
                     match = re.match(r'.* Schema dump: (.*)', line)
                     if match:
@@ -225,7 +265,7 @@ class PipelineGraph:
 
     def new_trace_text(self, txt):
         # we are looking for  a line: EV:  ...
-        match = re.search(r'EV:([0-9]+),S:([0-9]+),IDS:([0-9]+),IDD:([0-9]+),TSS:([0-9]+),TSN:([0-9]+)', txt.rstrip('\n'))
+        match = re.search(r'EV:([0-9]+),S:([0-9]+),IDS:([0-9]+),IDD:([0-9]+),TSS:([0-9]+),TSN:([0-9]+),QS:([0-9]+)', txt.rstrip('\n'))
         if match:
             trace_event = TraceEvent()
             trace_event.event = EventEnum(int(match.group(1)))
@@ -234,6 +274,7 @@ class PipelineGraph:
             trace_event.dst_id = match.group(4)
             trace_event.timestamp = int(match.group(5)) + (int(match.group(6)) / 1000000000.0)
             trace_event.host_timestamp = time.time()
+            trace_event.queue_size = match.group(7)
 
             if trace_event.status == StatusEnum.START and trace_event.event == EventEnum.SEND:
                 link = self.links[trace_event.dst_id][trace_event.src_id]
@@ -243,7 +284,17 @@ class PipelineGraph:
                     # SrcId is none, we can just take the first dst it
                     link.new_event(trace_event)
                     break
-
+        # Now look for a node event status - IDN:12,MGTSS:0,MGTSN:172385224,PTSS:0,PTSN:29157317,MSTSS:0,MSTSN:83
+        match = re.search(r'IDN:([0-9]+),MGTSS:([0-9]+),MGTSN:([0-9]+),PTSS:([0-9]+),PTSN:([0-9]+),MSTSS:([0-9]+),MSTSN:([0-9]+)', txt.rstrip('\n'))
+        if match:
+            node_trace_event = NodeTraceEvent()
+            node_trace_event.node_id = match.group(1)
+            node_trace_event.time_to_get = int(match.group(2)) + (int(match.group(3)) / 1000000000.0)
+            node_trace_event.time_to_process = int(match.group(4)) + (int(match.group(5)) / 1000000000.0)
+            node_trace_event.time_to_send = int(match.group(6)) + (int(match.group(7)) / 1000000000.0)
+            node_trace_event.time_total = node_trace_event.time_to_get + node_trace_event.time_to_process + node_trace_event.time_to_send
+            self.nodes[int(node_trace_event.node_id)].new_event(node_trace_event)
+            # print(f"Node ID {node_trace_event.node_id} - get {node_trace_event.time_to_get:.3f}ms, proc {node_trace_event.time_to_process:.3f}ms, send {node_trace_event.time_to_send:.3f}ms, total {node_trace_event.time_total:.3f}ms")
 
     def traceEventReader(self):
         # local_event_buffer = []
@@ -258,6 +309,7 @@ class PipelineGraph:
         self.ports: List[NodePort] = []
         start_nodes = []
         for n in schema['nodes']:
+            node_id = n[0]
             dict_n = n[1]
             dict_n['ioInfo'] = [el[1] for el in dict_n['ioInfo']]
 
@@ -270,7 +322,7 @@ class PipelineGraph:
                                              color=self.node_color.get(node_name, self.default_node_color),
                                              text_color=(0,0,0),
                                              push_undo=False)
-
+            self.nodes[node_id] = qt_node
             if node_name in ['ColorCamera', 'MonoCamera', 'XLinkIn']:
                 start_nodes.append(qt_node)
 
@@ -341,6 +393,8 @@ class PipelineGraph:
         for _, ports in self.links.items():
             for _, link in ports.items():
                 link.update_fps() # Update text
+        for _, node in self.nodes.items():
+            node.update_events()
 
         self.app.processEvents()
 

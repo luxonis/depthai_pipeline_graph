@@ -33,6 +33,7 @@ class PortItem(QtWidgets.QGraphicsItem):
         self._port_type = None
         self._multi_connection = False
         self._locked = False
+        self._queue_size = "0"
 
         self.fps_arr = []
 
@@ -51,6 +52,9 @@ class PortItem(QtWidgets.QGraphicsItem):
     def set_graphic_text(self, text: QtWidgets.QGraphicsTextItem, port_name: str):
         self.fps_text = text
         self.port_name = port_name
+
+    def setQueueSize(self, size):
+        self._queue_size = size
 
     def paint(self, painter, option, widget):
         """
@@ -125,6 +129,7 @@ class PortItem(QtWidgets.QGraphicsItem):
 
     def new_event(self, trace: TraceEvent):
         self.fps_arr.append(trace.host_timestamp)
+        self._queue_size = trace.queue_size
 
     def update_fps(self): # Gets called from main thread
         for i, ts in enumerate(self.fps_arr):
@@ -132,7 +137,7 @@ class PortItem(QtWidgets.QGraphicsItem):
                 self.fps_arr = self.fps_arr[i:]
                 break
 
-        self.fps_text.setPlainText("FPS: {:.0f}".format(len(self.fps_arr) / 2.0))
+        self.fps_text.setPlainText("FPS: {:.0f} QS: {}".format(len(self.fps_arr) / 2.0, self._queue_size))
 
     def itemChange(self, change, value):
         if change == self.ItemScenePositionHasChanged:
