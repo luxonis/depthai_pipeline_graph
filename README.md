@@ -1,8 +1,49 @@
 # DepthAI Pipeline Graph
 
+
+
+
 A tool that dynamically creates graphs of [DepthAI pipelines](https://docs.luxonis.com/projects/api/en/latest/components/pipeline/). It is an **ideal tool for debugging**, as it provides insight into the pipeline and its inner workings. The original author of this tool is [geaxgx](https://github.com/geaxgx), Luxonis has updated some features and added FPS counting.
 
 ![Graph of Age-Gender demo](https://github.com/luxonis/depthai_pipeline_graph/assets/18037362/dde3b10f-c006-456c-8927-366b5afce508)
+
+## Trace events WIP
+**NOTE: This is a work in progress and supported only on RVC3 devices**
+
+On depthai-python `rvc3_side_channel` the `pipeline_graph` utility can show node processing times as well as current queue sizes along the other information (pipeline layout, FPS counting, etc)
+
+![node_traces](https://github.com/luxonis/depthai_pipeline_graph/assets/47612463/f802723d-84b9-45cb-b9fe-353948d06169)
+
+### Installation for the trace events branch
+To install the required `depthai-python`` version run
+```
+pip install --force-reinstall --extra-index-url https://artifacts.luxonis.com/artifactory/luxonis-python-snapshot-local/ depthai==2.19.1.0.dev0+26665df3c2223f8b105e7b074e4cc8ad5238b460
+```
+
+To install pipeline graph on the correct branch run:
+```
+pip install git+https://github.com/luxonis/depthai_pipeline_graph.git@trace_events
+```
+
+
+### Legend
+![single_node_trace](https://github.com/luxonis/depthai_pipeline_graph/assets/47612463/00736704-3b35-4d48-a5f1-0e20ab128615)
+
+#### Input name explanation
+`[8] in (FPS:3 QS:0)`
+* `[8]` - max queue size of the input is 8
+* `in` - input name
+* `FPS:3` - input FPS of the queue is 3
+* `QS:0` - current queue size (number of images in the queue) is 0
+
+#### Node name explanation
+
+`XLinkOut(4) (G:315ms,P:005ms,S:000ms,T:321ms)`
+* `XLinkOut(4)` - Node name along with node ID in the parenthesis
+* `G:315ms` - Time to **get** the images from the previous node.
+* `P:005ms` - Time to **process** the images (without getting and sending images to the next node)
+* `S:000ms` - Time to **send** the images to the next node ,should be `0ms` if the queue on the next node is not full or if it's set to non blocking.
+* `T:321ms` - Total time (all three of the above combined) it took the node to complete one processing loop.
 
 ## How it works ?
 In the DepthAI context, a pipeline is a collection of nodes and links between them.
