@@ -56,7 +56,7 @@ class DepthaiNode(BaseNode):
         t_to_send = self.send_frames_times.get() * 1000
         t_total = self.total_times.get() * 1000
 
-        new_name = f"{self.ORIGINAL_NAME}-G:{t_to_get:03.0f},P:{t_to_proc:03.0f},S:{t_to_send:03.0f},T:{t_total:03.0f}"
+        new_name = f"{self.ORIGINAL_NAME} (G:{t_to_get:03.0f},P:{t_to_proc:03.0f},S:{t_to_send:03.0f},T:{t_total:03.0f})"
         self.set_name(new_name)
         if not self.updated:
             self.updated = True
@@ -313,13 +313,13 @@ class PipelineGraph:
             dict_n = n[1]
             dict_n['ioInfo'] = [el[1] for el in dict_n['ioInfo']]
 
-            node_name = dict_n['name']
+            node_name =f"{dict_n['name']}({node_id})"
 
             # Create the node
             qt_node = self.graph.create_node('dai.DepthaiNode',
                                              name=node_name,
                                              selected=False,
-                                             color=self.node_color.get(node_name, self.default_node_color),
+                                             color=self.node_color.get(dict_n['name'], self.default_node_color),
                                              text_color=(0,0,0),
                                              push_undo=False)
             self.nodes[node_id] = qt_node

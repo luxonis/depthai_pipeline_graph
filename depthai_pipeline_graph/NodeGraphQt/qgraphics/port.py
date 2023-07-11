@@ -137,7 +137,7 @@ class PortItem(QtWidgets.QGraphicsItem):
                 self.fps_arr = self.fps_arr[i:]
                 break
 
-        self.fps_text.setPlainText("FPS: {:.0f} QS: {}".format(len(self.fps_arr) / 2.0, self._queue_size))
+        self.fps_text.setPlainText(self.name + " (FPS: {:.0f} QS: {})".format(len(self.fps_arr) / 2.0, self._queue_size))
 
     def itemChange(self, change, value):
         if change == self.ItemScenePositionHasChanged:
