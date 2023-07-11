@@ -56,7 +56,7 @@ class DepthaiNode(BaseNode):
         t_to_send = self.send_frames_times.get() * 1000
         t_total = self.total_times.get() * 1000
 
-        new_name = f"{self.ORIGINAL_NAME} (G:{t_to_get:03.0f},P:{t_to_proc:03.0f},S:{t_to_send:03.0f},T:{t_total:03.0f})"
+        new_name = f"{self.ORIGINAL_NAME} (G:{t_to_get:03.0f}ms,P:{t_to_proc:03.0f}ms,S:{t_to_send:03.0f}ms,T:{t_total:03.0f}ms)"
         self.set_name(new_name)
         if not self.updated:
             self.updated = True
@@ -165,6 +165,7 @@ class PipelineGraph:
         # show the node graph widget.
         self.graph_widget = self.graph.widget
         self.graph_widget.resize(1100, 800)
+        self.lazy_updated = False
         self.nodes = {}
     def cmd_tool(self, args):
         if args.action == "load":
@@ -397,6 +398,9 @@ class PipelineGraph:
             node.update_events()
 
         self.app.processEvents()
+        if not self.lazy_updated:
+            self.lazy_updated = True
+            self.graph.auto_layout_nodes()
 
 def main():
     parser = ArgumentParser()
