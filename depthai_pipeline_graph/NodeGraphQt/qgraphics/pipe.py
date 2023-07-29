@@ -81,7 +81,7 @@ class PipeItem(QtWidgets.QGraphicsPathItem):
     def new_event(self, trace: TraceEvent):
         if trace.event == EventEnum.SEND:
             self.fps_arr.append(trace.host_timestamp)
-            self.input_port.setQueueSize(trace.queue_size)
+            # self.input_port.setQueueSize(trace.queue_size)
         elif trace.event == EventEnum.RECEIVE:
             self.input_port.new_event(trace)
         elif trace.event == EventEnum.PULL:
