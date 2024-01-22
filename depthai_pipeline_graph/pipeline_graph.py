@@ -129,7 +129,7 @@ class PipelineGraph:
     def cmd_tool(self, args):
         if args.action == "load":
             self.graph_widget.show()
-            self.graph.load_session(args.json)
+            self.graph.load_session(args.json_file)
             self.graph.fit_to_selection()
             self.graph.set_zoom(-0.9)
             self.graph.clear_selection()
