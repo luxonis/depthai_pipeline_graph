@@ -11,7 +11,7 @@ class AbstractNodeItem(QtWidgets.QGraphicsItem):
 
     def __init__(self, name='node', parent=None):
         super(AbstractNodeItem, self).__init__(parent)
-        self.setFlags(self.ItemIsSelectable | self.ItemIsMovable)
+        self.setFlags(self.ItemIsSelectable or self.ItemIsMovable)
         self.setCacheMode(ITEM_CACHE_MODE)
         self.setZValue(Z_VAL_NODE)
         self._properties = {
