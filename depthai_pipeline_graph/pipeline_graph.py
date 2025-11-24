@@ -11,7 +11,7 @@ import time
 from threading import Thread
 from typing import Any, Dict, List
 import collections
-from .node_structs import *
+from node_structs import *
 
 class PipelineGraph:
 
@@ -204,7 +204,7 @@ class PipelineGraph:
                                              text_color=(0,0,0),
                                              push_undo=False)
             self.nodes[node_id] = qt_node
-            if node_name in ['ColorCamera', 'MonoCamera', 'XLinkIn', 'Cammera']:
+            if node_name in ['ColorCamera', 'MonoCamera', 'XLinkIn', 'Camera', 'IMU']:
                 start_nodes.append(qt_node)
 
             # Alphabetic order
@@ -261,18 +261,18 @@ class PipelineGraph:
             if src_port.create():  # Output
                 new_port_index = len(src_port.node.output_ports())
                 port_label = f"[  ?   | {src_port.nice_name()}]"
-                src_port.port = src_port.node.add_output(name=port_label, color=(50,50,255))
+                src_port.port = src_port.node.add_output(name=port_label, color=(204, 204, 204), painter_func=draw_circle_port)
                 src_port.index = new_port_index
                 src_port.node.out_ports.append(src_port)
             if dst_port.create(): # Input
-                port_color = (249, 75, 0) if dst_port.blocking else (0, 255, 0)
+                port_color = (204, 204, 204)
+                port_shape_func = draw_square_port if dst_port.blocking else draw_circle_port
                 port_label = f"[  ?   | ?/{dst_port.queue_size}] {dst_port.nice_name()}"
                 new_port_index = len(dst_port.node.input_ports())
-                dst_port.port = dst_port.node.add_input(name=port_label, color=port_color, multi_input=True)
+                dst_port.port = dst_port.node.add_input(name=port_label, color=port_color, multi_input=True, painter_func=port_shape_func)
                 dst_port.index = new_port_index
                 dst_port.node.in_ports.append(dst_port)
 
-            print(f"{i}. {src_port} -> {dst_port}")
             link = src_port.port.connect_to(dst_port.port, push_undo=False)
 
             if dst_port.id not in self.links:

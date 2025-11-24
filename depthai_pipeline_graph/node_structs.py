@@ -2,6 +2,36 @@ from NodeGraphQt import BaseNode, NodeBaseWidget
 from typing import Any, Dict, List
 from Qt import QtWidgets, QtGui, QtCore
 
+def draw_square_port(painter, rect, info):
+    painter.save()
+
+    color = QtGui.QColor(*info['color'])
+    border_color = QtGui.QColor(*info['border_color'])
+
+    pen = QtGui.QPen(border_color, 1.8)
+    pen.setJoinStyle(QtCore.Qt.MiterJoin)
+
+    painter.setPen(pen)
+    painter.setBrush(color)
+    painter.drawRect(rect)
+
+    painter.restore()
+
+def draw_circle_port(painter, rect, info):
+    painter.save()
+
+    color = QtGui.QColor(*info['color'])
+    border_color = QtGui.QColor(*info['border_color'])
+
+    pen = QtGui.QPen(border_color, 1.8)
+    pen.setJoinStyle(QtCore.Qt.MiterJoin)
+
+    painter.setPen(pen)
+    painter.setBrush(color)
+    painter.drawEllipse(rect)
+
+    painter.restore()
+
 class InfoTextWidget(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super(InfoTextWidget, self).__init__(parent)
@@ -66,6 +96,18 @@ class DepthaiNode(BaseNode):
 
         if self.state and self.update_node_state:
             self.update_node_state = False
+
+            new_name = self.original_name
+            if self.state.state == NodeState.State.GETTING_INPUTS:
+                new_name += "[G]"
+            elif self.state.state == NodeState.State.PROCESSING:
+                new_name += "[P]"
+            elif self.state.state == NodeState.State.SENDING_OUTPUTS:
+                new_name += "[S]"
+
+            if(self.name() != new_name):
+                self.set_name(new_name)
+
             # Convert to ms
             t_to_get = self.state.inputsGetTiming.durationStats
             t_to_send = self.state.outputsSendTiming.durationStats
@@ -92,6 +134,21 @@ class DepthaiNode(BaseNode):
                     port.view.name = port_label
                     self.view.get_input_text_item(port.view).setPlainText(port_label)
 
+                    if input_state.state == NodeState.InputQueueState.State.IDLE:
+                        color = (34, 139, 34)  # green
+                    elif input_state.state == NodeState.InputQueueState.State.WAITING:
+                        color = (255, 255, 0)  # yellow
+                    elif input_state.state == NodeState.InputQueueState.State.BLOCKED:
+                        color = (255, 0, 0)  # red
+                    else:
+                        color = (204, 204, 204)
+
+                    port.model.color = color
+                    port_item = port.view
+                    port_item.color = color
+                    port_item.border_color = (204, 204, 204)
+                    port_item.update()
+
             for output_name, output_state in self.state.outputStates.items():
                 matching_ports = [port for port in self.out_ports if port.name == output_name]
                 if not matching_ports:
@@ -103,6 +160,19 @@ class DepthaiNode(BaseNode):
                     port.model.name = port_label
                     port.view.name = port_label
                     self.view.get_output_text_item(port.view).setPlainText(port_label)
+
+                    if output_state.state == NodeState.OutputQueueState.State.IDLE:
+                        color = (34, 139, 34)  # green
+                    elif output_state.state == NodeState.OutputQueueState.State.SENDING:
+                        color = (255, 255, 0)  # yellow
+                    else:
+                        color = (204, 204, 204)
+
+                    port.model.color = color
+                    port_item = port.view
+                    port_item.color = color
+                    port_item.border_color = (204, 204, 204)
+                    port_item.update()
 
             if not self.updated:
                 self.updated = True
