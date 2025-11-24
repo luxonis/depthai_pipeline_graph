@@ -2,7 +2,7 @@ import argparse
 
 arg_parser = argparse.ArgumentParser(description="Mock DepthAI Output Generator")
 arg_parser.add_argument("--file", type=str, required=True, default="spatial_detection_output.txt", help="Input file path")
-arg_parser.add_argument("--interval", type=float, default=2.0, help="Interval between outputs in seconds")
+arg_parser.add_argument("--interval", type=float, default=1.0, help="Interval between outputs in seconds")
 args = arg_parser.parse_args()
 
 import time

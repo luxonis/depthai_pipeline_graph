@@ -11,7 +11,7 @@ import time
 from threading import Thread
 from typing import Any, Dict, List
 import collections
-from node_structs import *
+from .node_structs import *
 
 class PipelineGraph:
 
