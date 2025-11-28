@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from NodeGraphQt import BaseNode, NodeBaseWidget
 from typing import Any, Dict, List
 from Qt import QtWidgets, QtGui, QtCore
