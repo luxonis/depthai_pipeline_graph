@@ -64,6 +64,34 @@ class NodeWidgetWrapper(NodeBaseWidget):
         widget.label.setText(text)
 
 class NodeState:
+    class QueueStats:
+        maxQueued: int
+        maxQueuedRecent: int
+        medianQueuedRecent: int
+        minQueuedRecent: int
+
+    class State:
+        IDLE = 0
+        GETTING_INPUTS = 1
+        PROCESSING = 2
+        SENDING_OUTPUTS = 3
+
+    class TimingStats:
+        averageMicrosRecent: int
+        maxMicros: int
+        maxMicrosRecent: int
+        medianMicrosRecent: int
+        minMicros: int
+        minMicrosRecent: int
+        stdDevMicrosRecent: int
+
+        def isValid(self) -> bool:
+            return self.maxMicros > self.minMicros
+
+    class Timing:
+        durationStats: NodeState.TimingStats
+        fps: float
+
     class InputQueueState:
         class State:
             IDLE = 0
@@ -80,34 +108,6 @@ class NodeState:
             SENDING = 1
         state: NodeState.OutputQueueState.State
         timing: NodeState.Timing
-
-    class QueueStats:
-        maxQueued: int
-        maxQueuedRecent: int
-        medianQueuedRecent: int
-        minQueuedRecent: int
-
-    class State:
-        IDLE = 0
-        GETTING_INPUTS = 1
-        PROCESSING = 2
-        SENDING_OUTPUTS = 3
-
-    class Timing:
-        durationStats: NodeState.TimingStats
-        fps: float
-
-    class TimingStats:
-        averageMicrosRecent: int
-        maxMicros: int
-        maxMicrosRecent: int
-        medianMicrosRecent: int
-        minMicros: int
-        minMicrosRecent: int
-        stdDevMicrosRecent: int
-
-        def isValid(self) -> bool:
-            return self.maxMicros > self.minMicros
 
     inputStates: dict[str, NodeState.InputQueueState]
     inputsGetTiming: NodeState.Timing
