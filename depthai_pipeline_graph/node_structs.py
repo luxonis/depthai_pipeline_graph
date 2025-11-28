@@ -63,157 +63,6 @@ class NodeWidgetWrapper(NodeBaseWidget):
         widget = self.get_custom_widget()
         widget.label.setText(text)
 
-class DepthaiNode(BaseNode):
-    # unique node identifier.
-    __identifier__ = 'dai'
-
-    # initial default node name.
-    NODE_NAME = 'Node'
-
-    def __init__(self):
-        super(DepthaiNode, self).__init__()
-        self.original_name = None
-        self.state: NodeState | None = None
-        self.updated = False
-        self.update_node_state = False
-        self.out_ports: List[NodePort] = []
-        self.in_ports: List[NodePort] = []
-
-        # add custom widget to node with "node.view" as the parent.
-        node_widget = NodeWidgetWrapper(self.view)
-        self.add_custom_widget(node_widget, tab='Info')
-
-    def new_state(self, new_state: NodeState):
-        self.state = new_state
-        self.update_node_state = True
-
-    def update_state(self):
-        if self.original_name is None:
-            self.original_name = self.NODE_NAME
-
-        if not self.get_widget('info_widget').isVisible():
-            return
-
-        if self.state and self.update_node_state:
-            self.update_node_state = False
-
-            new_name = self.original_name
-            if self.state.state == NodeState.State.GETTING_INPUTS:
-                new_name += "[G]"
-            elif self.state.state == NodeState.State.PROCESSING:
-                new_name += "[P]"
-            elif self.state.state == NodeState.State.SENDING_OUTPUTS:
-                new_name += "[S]"
-
-            if(self.name() != new_name):
-                self.set_name(new_name)
-
-            # Convert to ms
-            t_to_get = self.state.inputsGetTiming.durationStats
-            t_to_send = self.state.outputsSendTiming.durationStats
-            t_total = self.state.mainLoopTiming.durationStats
-
-            t_to_get_ms = (t_to_get.averageMicrosRecent if t_to_get.isValid() else 0) / 1000
-            t_to_send_ms = (t_to_send.averageMicrosRecent if t_to_send.isValid() else 0) / 1000
-            t_total_ms = (t_total.averageMicrosRecent if t_total.isValid() else 0) / 1000
-            t_to_proc_ms = t_total_ms - t_to_get_ms - t_to_send_ms
-
-            info_text = f"(G:{t_to_get_ms:03.0f}ms,P:{t_to_proc_ms:03.0f}ms,S:{t_to_send_ms:03.0f}ms,T:{t_total_ms:03.0f}ms)"
-            widget = self.get_widget('info_widget')
-            widget.set_value(info_text)
-
-            for input_name, input_state in self.state.inputStates.items():
-                matching_ports = [port for port in self.in_ports if port.name == input_name]
-                if not matching_ports:
-                    continue
-                matching_port = matching_ports[0]
-                port = self.get_input(matching_port.index)
-                if port:
-                    port_label = f"[{input_state.timing.fps: 3.1f} | {input_state.numQueued}/{matching_port.queue_size}] {matching_port.nice_name()}"
-                    port.model.name = port_label
-                    port.view.name = port_label
-                    self.view.get_input_text_item(port.view).setPlainText(port_label)
-
-                    if input_state.state == NodeState.InputQueueState.State.IDLE:
-                        color = (34, 139, 34)  # green
-                    elif input_state.state == NodeState.InputQueueState.State.WAITING:
-                        color = (255, 255, 0)  # yellow
-                    elif input_state.state == NodeState.InputQueueState.State.BLOCKED:
-                        color = (255, 0, 0)  # red
-                    else:
-                        color = (204, 204, 204)
-
-                    port.model.color = color
-                    port_item = port.view
-                    port_item.color = color
-                    port_item.border_color = (204, 204, 204)
-                    port_item.update()
-
-            for output_name, output_state in self.state.outputStates.items():
-                matching_ports = [port for port in self.out_ports if port.name == output_name]
-                if not matching_ports:
-                    continue
-                matching_port = matching_ports[0]
-                port = self.get_output(matching_port.index)
-                if port:
-                    port_label = f"[{output_state.timing.fps: 3.1f}] {matching_port.nice_name()}"
-                    port.model.name = port_label
-                    port.view.name = port_label
-                    self.view.get_output_text_item(port.view).setPlainText(port_label)
-
-                    if output_state.state == NodeState.OutputQueueState.State.IDLE:
-                        color = (34, 139, 34)  # green
-                    elif output_state.state == NodeState.OutputQueueState.State.SENDING:
-                        color = (255, 255, 0)  # yellow
-                    else:
-                        color = (204, 204, 204)
-
-                    port.model.color = color
-                    port_item = port.view
-                    port_item.color = color
-                    port_item.border_color = (204, 204, 204)
-                    port_item.update()
-
-            if not self.updated:
-                self.updated = True
-                self.update()
-                self.view.draw_node()
-
-
-class NodePort:
-    TYPE_INPUT = 3
-    TYPE_OUTPUT = 0
-
-    id: str # Id of the port
-    index: int  # Index of the port
-    name: str # preview, out, video...
-    port: Any = None  # QT port object
-    node: Dict  # From json schema
-    type: int  # Input or output
-    dai_node: Any
-    group_name: str
-    blocking: bool
-    queue_size: int
-    state: NodeState.InputQueueState | NodeState.OutputQueueState | None
-
-    def nice_name(self) -> str: # For visualization
-        return f"{self.group_name}[{self.name}]" if self.group_name else self.name
-
-    def create(self) -> bool:
-        return self.port is None
-    def is_input(self) -> bool:
-        return self.type == 3
-
-    def is_output(self) -> bool:
-        return self.type == 0
-
-    def find_node(self, node_id: int, group_name: str, port_name: str) -> bool:
-        return self.name == port_name and self.dai_node['id'] == node_id and self.group_name == group_name
-
-    def __str__(self):
-        return f"{self.dai_node['name']}.{self.name} ({self.id})"
-
-
 class NodeState:
     class InputQueueState:
         class State:
@@ -409,3 +258,154 @@ class PipelineState:
         for nodeId, nodeStateData in json['nodeStates']:
             ps.nodeStates[int(nodeId)] = NodeState.fromJSON(nodeStateData)
         return ps
+
+
+class DepthaiNode(BaseNode):
+    # unique node identifier.
+    __identifier__ = 'dai'
+
+    # initial default node name.
+    NODE_NAME = 'Node'
+
+    def __init__(self):
+        super(DepthaiNode, self).__init__()
+        self.original_name = None
+        self.state: NodeState | None = None
+        self.updated = False
+        self.update_node_state = False
+        self.out_ports: List[NodePort] = []
+        self.in_ports: List[NodePort] = []
+
+        # add custom widget to node with "node.view" as the parent.
+        node_widget = NodeWidgetWrapper(self.view)
+        self.add_custom_widget(node_widget, tab='Info')
+
+    def new_state(self, new_state: NodeState):
+        self.state = new_state
+        self.update_node_state = True
+
+    def update_state(self):
+        if self.original_name is None:
+            self.original_name = self.NODE_NAME
+
+        if not self.get_widget('info_widget').isVisible():
+            return
+
+        if self.state and self.update_node_state:
+            self.update_node_state = False
+
+            new_name = self.original_name
+            if self.state.state == NodeState.State.GETTING_INPUTS:
+                new_name += "[G]"
+            elif self.state.state == NodeState.State.PROCESSING:
+                new_name += "[P]"
+            elif self.state.state == NodeState.State.SENDING_OUTPUTS:
+                new_name += "[S]"
+
+            if(self.name() != new_name):
+                self.set_name(new_name)
+
+            # Convert to ms
+            t_to_get = self.state.inputsGetTiming.durationStats
+            t_to_send = self.state.outputsSendTiming.durationStats
+            t_total = self.state.mainLoopTiming.durationStats
+
+            t_to_get_ms = (t_to_get.averageMicrosRecent if t_to_get.isValid() else 0) / 1000
+            t_to_send_ms = (t_to_send.averageMicrosRecent if t_to_send.isValid() else 0) / 1000
+            t_total_ms = (t_total.averageMicrosRecent if t_total.isValid() else 0) / 1000
+            t_to_proc_ms = t_total_ms - t_to_get_ms - t_to_send_ms
+
+            info_text = f"(G:{t_to_get_ms:03.0f}ms,P:{t_to_proc_ms:03.0f}ms,S:{t_to_send_ms:03.0f}ms,T:{t_total_ms:03.0f}ms)"
+            widget = self.get_widget('info_widget')
+            widget.set_value(info_text)
+
+            for input_name, input_state in self.state.inputStates.items():
+                matching_ports = [port for port in self.in_ports if port.name == input_name]
+                if not matching_ports:
+                    continue
+                matching_port = matching_ports[0]
+                port = self.get_input(matching_port.index)
+                if port:
+                    port_label = f"[{input_state.timing.fps: 3.1f} | {input_state.numQueued}/{matching_port.queue_size}] {matching_port.nice_name()}"
+                    port.model.name = port_label
+                    port.view.name = port_label
+                    self.view.get_input_text_item(port.view).setPlainText(port_label)
+
+                    if input_state.state == NodeState.InputQueueState.State.IDLE:
+                        color = (34, 139, 34)  # green
+                    elif input_state.state == NodeState.InputQueueState.State.WAITING:
+                        color = (255, 255, 0)  # yellow
+                    elif input_state.state == NodeState.InputQueueState.State.BLOCKED:
+                        color = (255, 0, 0)  # red
+                    else:
+                        color = (204, 204, 204)
+
+                    port.model.color = color
+                    port_item = port.view
+                    port_item.color = color
+                    port_item.border_color = (204, 204, 204)
+                    port_item.update()
+
+            for output_name, output_state in self.state.outputStates.items():
+                matching_ports = [port for port in self.out_ports if port.name == output_name]
+                if not matching_ports:
+                    continue
+                matching_port = matching_ports[0]
+                port = self.get_output(matching_port.index)
+                if port:
+                    port_label = f"[{output_state.timing.fps: 3.1f}] {matching_port.nice_name()}"
+                    port.model.name = port_label
+                    port.view.name = port_label
+                    self.view.get_output_text_item(port.view).setPlainText(port_label)
+
+                    if output_state.state == NodeState.OutputQueueState.State.IDLE:
+                        color = (34, 139, 34)  # green
+                    elif output_state.state == NodeState.OutputQueueState.State.SENDING:
+                        color = (255, 255, 0)  # yellow
+                    else:
+                        color = (204, 204, 204)
+
+                    port.model.color = color
+                    port_item = port.view
+                    port_item.color = color
+                    port_item.border_color = (204, 204, 204)
+                    port_item.update()
+
+            if not self.updated:
+                self.updated = True
+                self.update()
+                self.view.draw_node()
+
+
+class NodePort:
+    TYPE_INPUT = 3
+    TYPE_OUTPUT = 0
+
+    id: str # Id of the port
+    index: int  # Index of the port
+    name: str # preview, out, video...
+    port: Any = None  # QT port object
+    node: Dict  # From json schema
+    type: int  # Input or output
+    dai_node: Any
+    group_name: str
+    blocking: bool
+    queue_size: int
+    state: NodeState.InputQueueState | NodeState.OutputQueueState | None
+
+    def nice_name(self) -> str: # For visualization
+        return f"{self.group_name}[{self.name}]" if self.group_name else self.name
+
+    def create(self) -> bool:
+        return self.port is None
+    def is_input(self) -> bool:
+        return self.type == 3
+
+    def is_output(self) -> bool:
+        return self.type == 0
+
+    def find_node(self, node_id: int, group_name: str, port_name: str) -> bool:
+        return self.name == port_name and self.dai_node['id'] == node_id and self.group_name == group_name
+
+    def __str__(self):
+        return f"{self.dai_node['name']}.{self.name} ({self.id})"
