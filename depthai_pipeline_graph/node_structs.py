@@ -89,7 +89,7 @@ class NodeState:
             return self.maxMicros > self.minMicros
 
     class Timing:
-        durationStats: NodeState.TimingStats
+        durationStats: TimingStats
         fps: float
 
     class InputQueueState:
@@ -98,24 +98,24 @@ class NodeState:
             WAITING = 1
             BLOCKED = 2
         numQueued: int
-        queueStats: NodeState.QueueStats
-        state: NodeState.InputQueueState.State
-        timing: NodeState.Timing
+        queueStats: QueueStats
+        state: State
+        timing: Timing
 
     class OutputQueueState:
         class State:
             IDLE = 0
             SENDING = 1
-        state: NodeState.OutputQueueState.State
-        timing: NodeState.Timing
+        state: State
+        timing: Timing
 
-    inputStates: dict[str, NodeState.InputQueueState]
-    inputsGetTiming: NodeState.Timing
-    mainLoopTiming: NodeState.Timing
-    otherTimings: dict[str, NodeState.Timing]
-    outputStates: dict[str, NodeState.OutputQueueState]
-    outputsSendTiming: NodeState.Timing
-    state: NodeState.State
+    inputStates: dict[str, InputQueueState]
+    inputsGetTiming: Timing
+    mainLoopTiming: Timing
+    otherTimings: dict[str, Timing]
+    outputStates: dict[str, OutputQueueState]
+    outputsSendTiming: Timing
+    state: State
 
     @staticmethod
     def fromJSON(json: dict) -> 'NodeState':
