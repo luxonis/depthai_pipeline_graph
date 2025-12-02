@@ -103,7 +103,7 @@ class PipelineGraph:
                     line = self.process.stdout.readline()
                     record_output += line
                     if args.verbose:
-                        print(line.rstrqip('\n'))
+                        print(line.rstrip('\n'))
                     # we are looking for  a line:  ... [debug] Schema dump: {"connections":[{"node1Id":1...
                     match = re.match(r'.* Full schema dump: (.*)', line)
                     if match:
