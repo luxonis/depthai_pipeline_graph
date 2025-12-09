@@ -1,6 +1,6 @@
 # DepthAI Pipeline Graph
 
-This version is compatible with DepthAIv3 with pipeline debugging support.
+This version is compatible with DepthAI version 3.3.0 or higher. For compatibility with older depthai versions use branch `main_old`.
 
 A tool that dynamically creates graphs of [DepthAI pipelines](https://docs.luxonis.com/projects/api/en/latest/components/pipeline/). It is an **ideal tool for debugging**, as it provides insight into the pipeline and its inner workings. The original author of this tool is [geaxgx](https://github.com/geaxgx), Luxonis has updated some features and added pipeline state information.
 
