@@ -78,7 +78,7 @@ class NodeState:
         PROCESSING = 2
         SENDING_OUTPUTS = 3
 
-    class TimingStats:
+    class DurationStats:
         averageMicrosRecent: int
         maxMicros: int
         maxMicrosRecent: int
@@ -91,7 +91,7 @@ class NodeState:
             return self.maxMicros > self.minMicros
 
     class Timing:
-        durationStats: NodeState.TimingStats
+        durationStats: NodeState.DurationStats
         fps: float
 
     class InputQueueState:
@@ -128,45 +128,45 @@ class NodeState:
         ns.mainLoopTiming.fps = mainLoopTimingData['fps']
 
         mainLoopTsData = mainLoopTimingData['durationStats']
-        mainLoopTimingStats = NodeState.TimingStats()
-        mainLoopTimingStats.averageMicrosRecent = mainLoopTsData['averageMicrosRecent']
-        mainLoopTimingStats.maxMicros = mainLoopTsData['maxMicros']
-        mainLoopTimingStats.maxMicrosRecent = mainLoopTsData['maxMicrosRecent']
-        mainLoopTimingStats.medianMicrosRecent = mainLoopTsData['medianMicrosRecent']
-        mainLoopTimingStats.minMicros = mainLoopTsData['minMicros']
-        mainLoopTimingStats.minMicrosRecent = mainLoopTsData['minMicrosRecent']
-        mainLoopTimingStats.stdDevMicrosRecent = mainLoopTsData['stdDevMicrosRecent']
-        ns.mainLoopTiming.durationStats = mainLoopTimingStats
+        mainLoopDurationStats = NodeState.DurationStats()
+        mainLoopDurationStats.averageMicrosRecent = mainLoopTsData['averageMicrosRecent']
+        mainLoopDurationStats.maxMicros = mainLoopTsData['maxMicros']
+        mainLoopDurationStats.maxMicrosRecent = mainLoopTsData['maxMicrosRecent']
+        mainLoopDurationStats.medianMicrosRecent = mainLoopTsData['medianMicrosRecent']
+        mainLoopDurationStats.minMicros = mainLoopTsData['minMicros']
+        mainLoopDurationStats.minMicrosRecent = mainLoopTsData['minMicrosRecent']
+        mainLoopDurationStats.stdDevMicrosRecent = mainLoopTsData['stdDevMicrosRecent']
+        ns.mainLoopTiming.durationStats = mainLoopDurationStats
 
         inputsGetTimingData = json['inputsGetTiming']
         ns.inputsGetTiming = NodeState.Timing()
         ns.inputsGetTiming.fps = inputsGetTimingData['fps']
 
         inputsGetTsData = inputsGetTimingData['durationStats']
-        inputsGetTimingStats = NodeState.TimingStats()
-        inputsGetTimingStats.averageMicrosRecent = inputsGetTsData['averageMicrosRecent']
-        inputsGetTimingStats.maxMicros = inputsGetTsData['maxMicros']
-        inputsGetTimingStats.maxMicrosRecent = inputsGetTsData['maxMicrosRecent']
-        inputsGetTimingStats.medianMicrosRecent = inputsGetTsData['medianMicrosRecent']
-        inputsGetTimingStats.minMicros = inputsGetTsData['minMicros']
-        inputsGetTimingStats.minMicrosRecent = inputsGetTsData['minMicrosRecent']
-        inputsGetTimingStats.stdDevMicrosRecent = inputsGetTsData['stdDevMicrosRecent']
-        ns.inputsGetTiming.durationStats = inputsGetTimingStats
+        inputsGetDurationStats = NodeState.DurationStats()
+        inputsGetDurationStats.averageMicrosRecent = inputsGetTsData['averageMicrosRecent']
+        inputsGetDurationStats.maxMicros = inputsGetTsData['maxMicros']
+        inputsGetDurationStats.maxMicrosRecent = inputsGetTsData['maxMicrosRecent']
+        inputsGetDurationStats.medianMicrosRecent = inputsGetTsData['medianMicrosRecent']
+        inputsGetDurationStats.minMicros = inputsGetTsData['minMicros']
+        inputsGetDurationStats.minMicrosRecent = inputsGetTsData['minMicrosRecent']
+        inputsGetDurationStats.stdDevMicrosRecent = inputsGetTsData['stdDevMicrosRecent']
+        ns.inputsGetTiming.durationStats = inputsGetDurationStats
 
         outputsSendTimingData = json['outputsSendTiming']
         ns.outputsSendTiming = NodeState.Timing()
         ns.outputsSendTiming.fps = outputsSendTimingData['fps']
 
         outputsSendTsData = outputsSendTimingData['durationStats']
-        outputsSendTimingStats = NodeState.TimingStats()
-        outputsSendTimingStats.averageMicrosRecent = outputsSendTsData['averageMicrosRecent']
-        outputsSendTimingStats.maxMicros = outputsSendTsData['maxMicros']
-        outputsSendTimingStats.maxMicrosRecent = outputsSendTsData['maxMicrosRecent']
-        outputsSendTimingStats.medianMicrosRecent = outputsSendTsData['medianMicrosRecent']
-        outputsSendTimingStats.minMicros = outputsSendTsData['minMicros']
-        outputsSendTimingStats.minMicrosRecent = outputsSendTsData['minMicrosRecent']
-        outputsSendTimingStats.stdDevMicrosRecent = outputsSendTsData['stdDevMicrosRecent']
-        ns.outputsSendTiming.durationStats = outputsSendTimingStats
+        outputsSendDurationStats = NodeState.DurationStats()
+        outputsSendDurationStats.averageMicrosRecent = outputsSendTsData['averageMicrosRecent']
+        outputsSendDurationStats.maxMicros = outputsSendTsData['maxMicros']
+        outputsSendDurationStats.maxMicrosRecent = outputsSendTsData['maxMicrosRecent']
+        outputsSendDurationStats.medianMicrosRecent = outputsSendTsData['medianMicrosRecent']
+        outputsSendDurationStats.minMicros = outputsSendTsData['minMicros']
+        outputsSendDurationStats.minMicrosRecent = outputsSendTsData['minMicrosRecent']
+        outputsSendDurationStats.stdDevMicrosRecent = outputsSendTsData['stdDevMicrosRecent']
+        ns.outputsSendTiming.durationStats = outputsSendDurationStats
 
         ns.inputStates = {}
         for inputName, inputStateData in json['inputStates'].items():
@@ -188,15 +188,15 @@ class NodeState:
             timing.fps = timingData['fps']
 
             tsData = timingData['durationStats']
-            timingStats = NodeState.TimingStats()
-            timingStats.averageMicrosRecent = tsData['averageMicrosRecent']
-            timingStats.maxMicros = tsData['maxMicros']
-            timingStats.maxMicrosRecent = tsData['maxMicrosRecent']
-            timingStats.medianMicrosRecent = tsData['medianMicrosRecent']
-            timingStats.minMicros = tsData['minMicros']
-            timingStats.minMicrosRecent = tsData['minMicrosRecent']
-            timingStats.stdDevMicrosRecent = tsData['stdDevMicrosRecent']
-            timing.durationStats = timingStats
+            durationStats = NodeState.DurationStats()
+            durationStats.averageMicrosRecent = tsData['averageMicrosRecent']
+            durationStats.maxMicros = tsData['maxMicros']
+            durationStats.maxMicrosRecent = tsData['maxMicrosRecent']
+            durationStats.medianMicrosRecent = tsData['medianMicrosRecent']
+            durationStats.minMicros = tsData['minMicros']
+            durationStats.minMicrosRecent = tsData['minMicrosRecent']
+            durationStats.stdDevMicrosRecent = tsData['stdDevMicrosRecent']
+            timing.durationStats = durationStats
 
             inputState.timing = timing
 
@@ -213,15 +213,15 @@ class NodeState:
             timing.fps = timingData['fps']
 
             tsData = timingData['durationStats']
-            timingStats = NodeState.TimingStats()
-            timingStats.averageMicrosRecent = tsData['averageMicrosRecent']
-            timingStats.maxMicros = tsData['maxMicros']
-            timingStats.maxMicrosRecent = tsData['maxMicrosRecent']
-            timingStats.medianMicrosRecent = tsData['medianMicrosRecent']
-            timingStats.minMicros = tsData['minMicros']
-            timingStats.minMicrosRecent = tsData['minMicrosRecent']
-            timingStats.stdDevMicrosRecent = tsData['stdDevMicrosRecent']
-            timing.durationStats = timingStats
+            durationStats = NodeState.DurationStats()
+            durationStats.averageMicrosRecent = tsData['averageMicrosRecent']
+            durationStats.maxMicros = tsData['maxMicros']
+            durationStats.maxMicrosRecent = tsData['maxMicrosRecent']
+            durationStats.medianMicrosRecent = tsData['medianMicrosRecent']
+            durationStats.minMicros = tsData['minMicros']
+            durationStats.minMicrosRecent = tsData['minMicrosRecent']
+            durationStats.stdDevMicrosRecent = tsData['stdDevMicrosRecent']
+            timing.durationStats = durationStats
 
             outputState.timing = timing
 
@@ -234,15 +234,15 @@ class NodeState:
             otherTiming.fps = otherTimingData['fps']
 
             tsData = otherTimingData['durationStats']
-            timingStats = NodeState.TimingStats()
-            timingStats.averageMicrosRecent = tsData['averageMicrosRecent']
-            timingStats.maxMicros = tsData['maxMicros']
-            timingStats.maxMicrosRecent = tsData['maxMicrosRecent']
-            timingStats.medianMicrosRecent = tsData['medianMicrosRecent']
-            timingStats.minMicros = tsData['minMicros']
-            timingStats.minMicrosRecent = tsData['minMicrosRecent']
-            timingStats.stdDevMicrosRecent = tsData['stdDevMicrosRecent']
-            otherTiming.durationStats = timingStats
+            durationStats = NodeState.DurationStats()
+            durationStats.averageMicrosRecent = tsData['averageMicrosRecent']
+            durationStats.maxMicros = tsData['maxMicros']
+            durationStats.maxMicrosRecent = tsData['maxMicrosRecent']
+            durationStats.medianMicrosRecent = tsData['medianMicrosRecent']
+            durationStats.minMicros = tsData['minMicros']
+            durationStats.minMicrosRecent = tsData['minMicrosRecent']
+            durationStats.stdDevMicrosRecent = tsData['stdDevMicrosRecent']
+            otherTiming.durationStats = durationStats
 
             ns.otherTimings[otherName] = otherTiming
 
