@@ -118,6 +118,16 @@ The label inside the node is formatted as \[(G:XXXms,P:XXXms,S:XXXms,T:XXXms)\] 
 * S: average time spent sending output messages per loop
 * T: average total time per loop
 
+The node name is formatted as *name*(*id*)\[*state*\] where:
+
+* *name* is the node type (ex: ColorCamera, NeuralNetwork, XLinkOut, etc.)
+* *id* is the unique node identifier
+* *state* is the current state of the node:
+  * I: inactive
+  * G: getting inputs
+  * P: processing
+  * S: sending outputs
+
 **Ports**
 
 For the input ports, the shape represents the blocking state of the port (square for blocking, round for non-blocking). The color of the input and output ports represents their status:
