@@ -52,7 +52,7 @@ class NodeWidgetWrapper(NodeBaseWidget):
         self.set_name('info_widget')
 
         # set the label above the widget.
-        self.set_label('Info Widget')
+        self.set_label(' ')
 
         # set the custom widget.
         self.set_custom_widget(InfoTextWidget())
