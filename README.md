@@ -134,7 +134,7 @@ For the input ports, the shape represents the blocking state of the port (square
 
 * Gray: inactive port (no data transferred yet)
 * Green: idle port (ready to receive / send data)
-* Yellow: busy port (data is being transferred)
+* Yellow: busy port (input is waiting for data / output is sending data)
 * Red: blocked input port (the input queue is full and an output is trying to send data to it)
 
 The label of input ports is formatted as \[*fps* | *num* / *max*\] *name*, where:
