@@ -1,30 +1,30 @@
 # DepthAI Pipeline Graph
 
-A tool that dynamically creates graphs of [DepthAI pipelines](https://docs.luxonis.com/projects/api/en/latest/components/pipeline/). It is an **ideal tool for debugging**, as it provides insight into the pipeline and its inner workings. The original author of this tool is [geaxgx](https://github.com/geaxgx), Luxonis has updated some features and added FPS counting.
+This version is compatible with DepthAI version 3.3.0 or higher. For compatibility with older depthai versions use branch `main_old`.
 
-![Graph of Age-Gender demo](https://github.com/luxonis/depthai_pipeline_graph/assets/18037362/dde3b10f-c006-456c-8927-366b5afce508)
+A tool that dynamically creates graphs of [DepthAI pipelines](https://docs.luxonis.com/projects/api/en/latest/components/pipeline/). It is an **ideal tool for debugging**, as it provides insight into the pipeline and its inner workings. The original author of this tool is [geaxgx](https://github.com/geaxgx), Luxonis has updated some features and added pipeline state information.
+
+![Detection network demo](media/pipeline_graph.png)
 
 ## How it works ?
 In the DepthAI context, a pipeline is a collection of nodes and links between them.
-In your code, after defining your pipeline, you usually pass your pipeline to the device, with a call similar to:
-```
-device.startPipeline(pipeline)
-```
-or
-```
-with dai.Device(pipeline) as device:
-```
-What happens then, is that the pipeline configuration gets serialized to JSON and sent to the OAK device. If the environment variable `DEPTHAI_LEVEL` is set to `debug` before running your code, the content of the JSON config is printed to the console like below:
+When the pipeline is built the pipeline configuration gets serialized to JSON. If the environment variable `DEPTHAI_LEVEL` is set to `debug` before running your code, the content of the JSON config is printed to the console like below:
 ```
 [2022-06-01 16:47:33.721] [debug] Schema dump: {"connections":[{"node1Id":8,"node1Output":"passthroughDepth","node1OutputGroup":"","node2Id":10
 ,"node2Input":"in","node2InputGroup":""},{"node1Id":8,"node1Output":"out","node1OutputGroup":"","node2Id":9,"node2Input":"in","node2InputGroup":""},{"node1Id":7,"node1Output":"depth","node1OutputGroup":"","node2Id":8,"node2Input":"inputDepth","node2InputGroup":""},{"node1Id":0,"node1Output":"preview","node1OutputGroup":"","node2Id":8,"node2Input":"in","node2InputGroup":""},{"node1Id":0,"node1Output":"preview","node1OutputGroup":"","node2Id":3,"node2Input":"inputImage","node2InputGroup":""}, 
 ...
 ```
+
+If the environment variable is set to `trace`, pipeline state information is also printed to the console, providing insights into the status of each node and port in the pipeline.
+
 By analyzing the printed schema dump, it is then possible to retrieve the nodes of the pipeline and their connections. That's exactly what the tool `pipeline_graph` is doing:
-* it sets  `DEPTHAI_LEVEL` to `debug`,
+
+* it sets  `DEPTHAI_LEVEL` to `trace`,
 * it runs your code,
 * it catches the schema dump in the ouput stream of the code (by default the tool then terminates the process running your code),
-* it parses the schema dump and creates the corresponding graph using a modified version of the [NodeGraphQt](https://github.com/jchanvfx/NodeGraphQt) framework.
+* it parses the schema dump and creates the corresponding graph using the NodeGraphQt framework,
+* it updates the graph with the pipeline state information (if available).
+
 <br>
 
 
@@ -109,28 +109,44 @@ pipeline_graph "python main.py -cam" -dnk
 Note how the `pipeline_graph` own arguments are placed outside the pair of quotes, whereas your program arguments are inside. 
 <br>When using the `-dnk` option, the pipeline graph is displayed only after you quit your program.
 
-
-
 **Nodes**
 
-By default, the node name in the grapth is its type (ColorCamera, ImageManip, NeuralNetwork,...) plus a index between parenthesis that corresponds to the order of creation of the node in the pipeline. For example, if the rgb camera is the first node you create, its name will be `"ColorCamera (0)"`.
-<br>
-When you have a lot of nodes of the same type, the index is not very helpful to distinguish between nodes. You can then used the `-var` or `--use_variable_names` argument to get a more meaningful name: the index number is replaced by the node variable name used in your code. The tool must know the variable name of the pipeline. "pipeline" is the default. Use the `-p` or `--pipeline_name` argument to specify another name.
+The label inside the node is formatted as \[(G:XXXms,P:XXXms,S:XXXms,T:XXXms)\] (XXX is a zero-padded number):
 
-<p align="center"> <img  src="media/pipeline_graph_naming.png" alt="Graph of the Human Machine Safety demo"></p>
+* G: average time spent getting input messages per loop
+* P: average time spent processing per loop (equals total - send - get)
+* S: average time spent sending output messages per loop
+* T: average total time per loop
 
-Note that when using this option, `pipeline_graph` will significantly run slower to build the graph (it relies on the python module "trace").
+The node name is formatted as *name*(*id*)\[*state*\] where:
+
+* *name* is the node type (ex: ColorCamera, NeuralNetwork, XLinkOut, etc.)
+* *id* is the unique node identifier
+* *state* is the current state of the node:
+  * I: inactive
+  * G: getting inputs
+  * P: processing
+  * S: sending outputs
 
 **Ports**
 
-For the input ports, the color represents the blocking state of the port (orange for blocking, green for non-blocking), and the number between [] corresponds to the queue size.
+For the input ports, the shape represents the blocking state of the port (square for blocking, round for non-blocking). The color of the input and output ports represents their status:
 
-<p align="center"> <img  src="media/ports.png" alt="Graph of the Human Machine Safety demo"></p>
-<br>
-Once the graph is displayed, a few operations are possible.
-You will probably reorganize the nodes by moving them if you are not satisfied with the proposed auto-layout. You can rename a node by directly double-clicking its name. If you double-click in a node (apart the name zone), a window opens which lets you change the node color and its name.
-By right-clicking in the graph, a menu appears: you can save your graph in a json file, load a previously save graph or do a few other self-explanatory operations.<br>
-<br>
+* Gray: inactive port (no data transferred yet)
+* Green: idle port (ready to receive / send data)
+* Yellow: busy port (input is waiting for data / output is sending data)
+* Red: blocked input port (the input queue is full and an output is trying to send data to it)
+
+The label of input ports is formatted as \[*fps* | *num* / *max*\] *name*, where:
+
+* *fps* is the rolling average frame rate of data received on that port (or "?" if no data has been received yet)
+* *num* is the number of messages currently waiting in the input queue (or "?" if no data has been received yet)
+* *max* is the maximum size of the input queue
+* *name* is the name of the port
+
+The label of output ports is formatted as \[*fps*\] *name*.
+
+![Pipeline graph node](media/pipeline_graph_node.png)
 
 ### 2) pipeline_graph from_file
 Use this command when the "pipeline_graph run" method fails (for instance, if your application is executed as a subprocess) or you don't have access to the application code (so you cannot run it) but the owner of the code send you a log file containing an execution trace.<br>
