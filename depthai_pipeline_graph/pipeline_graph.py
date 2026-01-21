@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 from argparse import ArgumentParser
-import depthai as dai
+try:
+    import depthai as dai
+except ImportError:  # depthai is optional unless live device tracing is used
+    dai = None
 import subprocess
 import os, signal
 import re
@@ -163,7 +166,7 @@ class PipelineGraph:
 
             self.create_graph(schema)
 
-    def new_trace_log(self, msg: dai.LogMessage):
+    def new_trace_log(self, msg):
         self.new_trace_text(msg.payload)
 
     def new_trace_text(self, txt):
@@ -182,7 +185,7 @@ class PipelineGraph:
             line = self.process.stdout.readline()
             self.new_trace_text(line)
 
-    def create_graph(self, schema: Dict, device: dai.Device = None):
+    def create_graph(self, schema: Dict, device=None):
 
         dai_connections = schema['connections']
         dai_bridges = schema['bridges']
@@ -315,7 +318,11 @@ class PipelineGraph:
         if self.process is not None: # Arg tool
             reading_thread = Thread(target=self.traceEventReader, args=())
             reading_thread.start()
-        else:
+        elif device is not None:
+            if dai is None:
+                raise RuntimeError(
+                    "depthai is required for live device tracing; install depthai or use 'run'/'from_file'."
+                )
             # device.setLogOutputLevel(dai.LogLevel.TRACE)
             device.setLogLevel(dai.LogLevel.TRACE)
             device.addLogCallback(self.new_trace_log)
