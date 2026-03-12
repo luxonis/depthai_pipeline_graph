@@ -195,6 +195,10 @@ class PipelineGraph:
         for n in schema['nodes']:
             node_id = n[0]
             dict_n = n[1]
+
+            if dict_n['name'] in ['NodeGroup', 'DeviceNodeGroup']:
+                continue
+
             dict_n['ioInfo'] = [el[1] for el in dict_n['ioInfo']]
 
             node_name =f"{dict_n['name']}({node_id})"
