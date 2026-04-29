@@ -137,14 +137,32 @@ For the input ports, the shape represents the blocking state of the port (square
 * Yellow: busy port (input is waiting for data / output is sending data)
 * Red: blocked input port (the input queue is full and an output is trying to send data to it)
 
-The label of input ports is formatted as \[*fps* | *num* / *max*\] *name*, where:
+The label of input ports is formatted as \[*recv_fps* | *num* / *max*\] *name*, where:
 
-* *fps* is the rolling average frame rate of data received on that port (or "?" if no data has been received yet)
+* *recv_fps* is the rolling rate at which the consumer is **pulling** messages out of this input queue (or "?" if no data has been received yet)
 * *num* is the number of messages currently waiting in the input queue (or "?" if no data has been received yet)
 * *max* is the maximum size of the input queue
 * *name* is the name of the port
 
-The label of output ports is formatted as \[*fps*\] *name*.
+The label of output ports is formatted as \[*send_fps*\] *name*, where:
+
+* *send_fps* is the rolling rate at which this producer node is **pushing** messages out. This is a node-level rate, so when a node has multiple output ports the same value is shown on each.
+
+Read together, the two ends of a connection tell you whether messages are getting through:
+
+* If *send_fps* on the upstream output port equals *recv_fps* on the downstream input port, no messages are being lost on this edge.
+* If *send_fps* > *recv_fps*, the difference is the rate at which messages are being **dropped**, typically because the downstream input queue was full and the upstream's output is non-blocking.
+* If both are equal but lower than the producer's nominal/expected rate, the producer is being held back by **back-pressure** (downstream input is blocking and full, so the producer is forced to wait).
+
+To locate a bottleneck, combine three visual cues:
+
+* **Output port color** on the producer side — yellow while sending, gray when idle.
+* **Input port color** on the consumer side — red when the input queue is full and the producer is being held back; yellow while waiting for data; green when ready.
+* **Node state suffix** in the title bar — `[I]` idle, `[G]` getting inputs, `[P]` processing, `[S]` sending outputs.
+
+A node whose input ports stay red while its body is in `[G]` or `[P]` is the consumer that can't keep up — i.e. the bottleneck — and the producer feeding that input is the one being throttled or dropping messages.
+
+Hover over a node body or port to see a tooltip with full timing/queue stats including estimated drop rate, period vs. active loop time, and `durationStats` (avg/min/max/median/stddev).
 
 ![Pipeline graph node](media/pipeline_graph_node.png)
 
