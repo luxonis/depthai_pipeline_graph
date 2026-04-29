@@ -286,6 +286,88 @@ class DepthaiNode(BaseNode):
         self.state = new_state
         self.update_node_state = True
 
+    def _fmt_timing_html(self, label, timing):
+        """Render a Timing struct as an HTML row block: label, fps, durationStats."""
+        if not timing or not timing.durationStats:
+            return f"<b>{label}</b>: (no data)"
+        ds = timing.durationStats
+        if not ds.isValid():
+            return f"<b>{label}</b>: (no samples yet)"
+        return (
+            f"<b>{label}</b>: fps={timing.fps:.2f}<br>"
+            f"&nbsp;&nbsp;avg={ds.averageMicrosRecent}us, "
+            f"median={ds.medianMicrosRecent}us, "
+            f"stddev={ds.stdDevMicrosRecent}us<br>"
+            f"&nbsp;&nbsp;min={ds.minMicrosRecent}us, "
+            f"max={ds.maxMicrosRecent}us "
+            f"(lifetime min/max={ds.minMicros}/{ds.maxMicros}us)"
+        )
+
+    def _build_node_tooltip(self):
+        """Compose a full per-node tooltip with state, all timings, and the
+        period-vs-active gap (idle/wait time hidden from instrumentation)."""
+        if not self.state:
+            return ""
+        state_name = {0: "IDLE", 1: "GETTING_INPUTS", 2: "PROCESSING", 3: "SENDING_OUTPUTS"}.get(self.state.state, "?")
+        ml = self.state.mainLoopTiming
+        period_us = (1e6 / ml.fps) if ml.fps > 0 else 0
+        active_us = ml.durationStats.averageMicrosRecent if (ml.durationStats and ml.durationStats.isValid()) else 0
+        idle_us = max(0, period_us - active_us) if period_us > 0 else 0
+        idle_pct = (100.0 * idle_us / period_us) if period_us > 0 else 0
+        parts = [
+            f"<b>{self.original_name or self.NODE_NAME}</b>",
+            f"state: <b>{state_name}</b>",
+            "",
+            f"period (1/fps): {period_us:.0f}us",
+            f"active (T): {active_us}us",
+            f"<i>idle/wait: {idle_us:.0f}us ({idle_pct:.0f}% - sensor sync, blocked sends, etc; not in any bucket)</i>",
+            "",
+            self._fmt_timing_html("mainLoopTiming", ml),
+            self._fmt_timing_html("inputsGetTiming", self.state.inputsGetTiming),
+            self._fmt_timing_html("outputsSendTiming", self.state.outputsSendTiming),
+        ]
+        if self.state.otherTimings:
+            parts.append("")
+            parts.append("<b>otherTimings:</b>")
+            for name, timing in self.state.otherTimings.items():
+                parts.append(self._fmt_timing_html(f"&nbsp;&nbsp;{name}", timing))
+        return "<br>".join(parts)
+
+    def _build_input_port_tooltip(self, name, input_state, matching_port):
+        in_state_name = {0: "IDLE", 1: "WAITING", 2: "BLOCKED"}.get(input_state.state, "?")
+        parts = [
+            f"<b>input port: {matching_port.nice_name()}</b>",
+            f"group: {matching_port.group_name or '(none)'}",
+            f"blocking: <b>{matching_port.blocking}</b> (waits on full queue if true, drops if false)",
+            f"queue: {input_state.numQueued}/{matching_port.queue_size}",
+            f"state: <b>{in_state_name}</b>",
+            "",
+            self._fmt_timing_html("port timing (recv)", input_state.timing),
+        ]
+        if input_state.queueStats:
+            qs = input_state.queueStats
+            parts.append(f"<b>queue stats</b>: max={qs.maxQueued}, recent max={qs.maxQueuedRecent}, recent median={qs.medianQueuedRecent}")
+        return "<br>".join(parts)
+
+    def _build_output_port_tooltip(self, name, output_state, matching_port):
+        out_state_name = {0: "IDLE", 1: "SENDING"}.get(output_state.state, "?")
+        send_fps = self.state.outputsSendTiming.fps if self.state else 0.0
+        port_fps = output_state.timing.fps
+        drop_fps = max(0.0, send_fps - port_fps)
+        parts = [
+            f"<b>output port: {matching_port.nice_name()}</b>",
+            f"group: {matching_port.group_name or '(none)'}",
+            f"blocking: <b>{matching_port.blocking}</b> (waits on full queue if true, drops if false)",
+            f"state: <b>{out_state_name}</b>",
+            "",
+            f"send rate (node-level outputsSendTiming.fps): {send_fps:.2f}",
+            f"per-port flow rate (this output's timing.fps): {port_fps:.2f}",
+            f"<b>estimated drops</b>: {drop_fps:.2f} fps",
+            "",
+            self._fmt_timing_html("port timing (send)", output_state.timing),
+        ]
+        return "<br>".join(parts)
+
     def update_state(self):
         if self.original_name is None:
             self.original_name = self.NODE_NAME
@@ -321,6 +403,10 @@ class DepthaiNode(BaseNode):
             widget = self.get_widget('info_widget')
             widget.set_value(info_text)
 
+            # Rich tooltip on the node body so the user can hover for full
+            # state detail (timings, period vs active, otherTimings).
+            self.view.setToolTip(self._build_node_tooltip())
+
             for input_name, input_state in self.state.inputStates.items():
                 matching_ports = [port for port in self.in_ports if port.name == input_name]
                 if not matching_ports:
@@ -346,6 +432,7 @@ class DepthaiNode(BaseNode):
                     port_item = port.view
                     port_item.color = color
                     port_item.border_color = (204, 204, 204)
+                    port_item.setToolTip(self._build_input_port_tooltip(input_name, input_state, matching_port))
                     port_item.update()
 
             for output_name, output_state in self.state.outputStates.items():
@@ -355,7 +442,14 @@ class DepthaiNode(BaseNode):
                 matching_port = matching_ports[0]
                 port = self.get_output(matching_port.index)
                 if port:
-                    port_label = f"[{output_state.timing.fps: 3.1f}] {matching_port.nice_name()}"
+                    # Show node-level outputsSendTiming.fps - the rate at which
+                    # this producer is pushing into the downstream queue. The
+                    # per-input-port label on the consumer side shows the pull
+                    # rate; the gap between them is the dropped-frame count.
+                    # Blocking type is conveyed by red coloring on the consumer
+                    # input port when it is BLOCKED.
+                    send_fps = self.state.outputsSendTiming.fps
+                    port_label = f"[{send_fps: 3.1f}] {matching_port.nice_name()}"
                     port.model.name = port_label
                     port.view.name = port_label
                     self.view.get_output_text_item(port.view).setPlainText(port_label)
@@ -371,6 +465,7 @@ class DepthaiNode(BaseNode):
                     port_item = port.view
                     port_item.color = color
                     port_item.border_color = (204, 204, 204)
+                    port_item.setToolTip(self._build_output_port_tooltip(output_name, output_state, matching_port))
                     port_item.update()
 
             if not self.updated:

@@ -161,7 +161,7 @@ class PipelineGraph:
                                 break
                         schema = json.loads(schema_str)
 
-            if args.verbose:
+            if getattr(args, "verbose", False):
                 print('Schema:', schema)
 
             self.create_graph(schema)
@@ -267,7 +267,7 @@ class PipelineGraph:
 
             if src_port.create():  # Output
                 new_port_index = len(src_port.node.output_ports())
-                port_label = f"[  ?   | {src_port.nice_name()}]"
+                port_label = f"[  ?  ] {src_port.nice_name()}"
                 src_port.port = src_port.node.add_output(name=port_label, color=(204, 204, 204), painter_func=draw_circle_port)
                 src_port.index = new_port_index
                 src_port.node.out_ports.append(src_port)
